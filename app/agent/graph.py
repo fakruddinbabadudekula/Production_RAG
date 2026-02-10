@@ -1,132 +1,110 @@
 # In this file create the langgraph agent class which is retrieve the top k results and give the answer to the user query
 from app.agent.retrievers.vector_retriever import Retriever
 from langgraph.graph import StateGraph, END, START
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict
 from app.agent.models import get_llm
-from functools import lru_cache
 from app.schemas.agent import GraphState
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.checkpoint.memory import InMemorySaver
-from app.agent.document_loaders.doc_loader import DocumentLoader
 import logging
+from pathlib import Path
 from app.config import settings
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-@lru_cache()
-def get_retriever(vector_dir: str):
-    return Retriever(vector_dir=vector_dir)
+def get_retriever(vector_path: str):
+    return Retriever(vector_dir=vector_path)
 
 
 class Graph:
-    def __init__(self):
-        self.retriever: Retriever = None
-        self.llm: None
-        self.user_id: Optional[str] = (
-            "test_session_user"  # use this value to store all vectors chat values in under this folder name
-        )
-        self.session_id: Optional[str] = (
-            "test_session"  # use this value for chat seperation vectors
-        )
-        self.vector_path: Optional[str] = None
-        self.graph: Optional[CompiledStateGraph] = None
+    def __init__(self, user_id: str, session_id: str):
+        self.llm = get_llm()
+        self.user_id = user_id
+        self.session_id = session_id
+        self.vector_path = f"{settings.VECTOR_FOLDER}{self.user_id}/{self.session_id}"
         self.saver: InMemorySaver = InMemorySaver()
+        self.graph: CompiledStateGraph = self._get_graph()
+        self.retriever:Retriever = get_retriever(self.vector_path)
 
     def _get_graph(self):
         try:
             workflow = StateGraph(GraphState)
+            workflow.add_node("retriever", self._retriever)
             workflow.add_node("chat", self._chat)
-            workflow.add_edge(START, "chat")
+            workflow.add_edge(START, "retriever")
+            workflow.add_edge("retriever", "chat")
             workflow.add_edge("chat", END)
             graph = workflow.compile(checkpointer=self.saver)
             return graph
         except Exception as e:
             logger.error(f"{str(e)}")
 
-    async def _initialize_all_variables(self, user_id, session_id):
-        self.llm = get_llm()
-        logger.info(f"llm is initialized")
-        self.user_id, self.session_id = user_id, session_id
-        path = f"{settings.VECTOR_FOLDER}{self.user_id}/{self.session_id}"
-        logger.info(f"Here is the path for vector DB: {path}")
-        self.vector_path = path
-        if not self.retriever:
-            self.retriever = get_retriever(self.vector_path)
-            logger.info("retriever is initialized from the graph")
-
-            # Here document loader is not need i just put here to add the attention is all you need.pdf vectors for first time
-            pdf_loader = DocumentLoader()
-            chunks = await pdf_loader.process_document(
-                path="app/agent/data/attention is all you need.pdf"
-            )
-
-            await self.retriever.aadd_documents(docs=chunks)
-
-        self.graph = self._get_graph()
-        logger.info(f"All states are initialized successfully in graph.")
-
     async def _chat(self, state: GraphState):
-        final_prompt, metadata = await self._final_prompt_with_metadata(
-            query=state["messages"][-1].content
+        final_prompt = self._final_prompt_with_sources(
+            query=state["messages"][-1].content, sources_data=state["retrieved_docs"]
         )
         response = await self.llm.ainvoke(final_prompt)
         logger.info(f"Response is generated successfully for {state['messages']}")
-        return {"messages": [response], "metadata": metadata}
+        return {"messages": [response]}
 
-    async def get_response_stream(self, query, user_id, session_id):
-        if not self.graph:
-            await self._initialize_all_variables(user_id=user_id, session_id=session_id)
+    async def _retriever(self, state: GraphState):
+        query = state["messages"][-1].content
+        try:
+            top_k_docs = await self.retriever.aget_top_k(query=query)
+            sources_data = self._formate_docs_to_list_dict(top_k_docs=top_k_docs)
+        except Exception as e:
+            logger.error(f"error while generating top_k docs and metadata {e}")
+            raise
+        return {"retrieved_docs": sources_data}
+
+    async def get_response_stream(self, query):
         try:
             config = {
-                "configurable": {"thread_id": session_id},
+                "configurable": {"thread_id": self.session_id},
             }
-            async for chunk, _ in self.graph.astream(
-                {"messages": [query]}, stream_mode="messages",config=config
+            async for mode, data in self.graph.astream(
+                {"messages": [query]},
+                stream_mode=["messages", "updates"],
+                config=config,
             ):
-                token =chunk.content if hasattr(chunk, "content") else str(chunk)
-                if not token.strip():
-                    continue
-                yield {
-                       'type':"token",
-                       'value':token}
+                if mode == "updates":
+                    if data.get("retriever", None):
+                        logger.info(f"Started Top_k_docs Streaming.")
+                        top_k_docs = data.get("retriever").get("retrieved_docs", [])
+                        yield {"type": "top_k_docs", "data": top_k_docs}
+                        logger.info("Top_k_docs streaming is completed")
+
+                elif mode == "messages":
+                    chunk, _ = data
+                    token = chunk.content if hasattr(chunk, "content") else str(chunk)
+                    if not token.strip():
+                        continue
+                    yield {"type": "token", "value": token}
             logger.info(f"Chat Streaming is Completed.")
-            last_state=self.graph.get_state(config=config)
-            # print(last_state)
-            logger.info(f"Started Metadata Streaming.")
-            metadata=last_state.values['metadata']
-            # print(metadata)
-            yield {
-                'type':"metadata",
-                'value':metadata
-            }
-            logger.info("Metadata streaming is completed")
             logger.info("Streaming is completed")
         except Exception as e:
             logger.error(f"{str(e)}")
             raise
-            
-    def _get_retriever(self, vector_path) -> Retriever:
-        try:
-            return Retriever(vector_dir=vector_path)
-        except Exception as e:
-            logger.error(f"{str(e)}")
 
-    async def _final_prompt_with_metadata(
-        self, query: str
-    ) -> Tuple[str | None, List[Dict] | None]:
+    def _final_prompt_with_sources(
+        self, query: str, sources_data: List[Dict] | None
+    ) -> str:
         try:
-            top_k_docs = await self.retriever.aget_top_k(query=query)
-            if not top_k_docs:
+            if not sources_data:
                 logger.info(f"No relavant docs are found for the query {query}")
-                final_prompt, metadata = query, [{'data':"No data is Found"}]
+                final_prompt = query
             else:
-                context, metadata = self._format_context_with_citations(top_k_docs)
+                content = []
+                for i, data in enumerate(sources_data):
+                    content.append(f"{i+1} {data['content']}")
+                context = "\n\n".join(content)
                 final_prompt = self._create_rag_prompt(query=query, context=context)
         except Exception as e:
             logger.error(f"error while generating top_k docs and metadata {e}")
             raise
-        return (final_prompt, metadata)
+        return final_prompt
 
     def _create_rag_prompt(self, query: str, context: str) -> str:
         prompt = f"""You are an AI assistant that answers questions based on provided source material. You must follow these citation rules:
@@ -147,24 +125,21 @@ class Graph:
 
         return prompt
 
-    def _format_context_with_citations(self, top_k_docs):
-        context_parts = []
+    def _formate_docs_to_list_dict(self, top_k_docs):
         source_metadata = []
         for i, doc in enumerate(top_k_docs):
-            content_index = f"[{i+1}]"
-            doc_content = doc.page_content
-            content = f"{content_index} {doc_content}"
-            doc_metadata = doc.metadata
             metadata = {
                 "index": i + 1,
-                "source": doc_metadata.get("source", "No source available"),
-                "page": doc_metadata.get("page", "no page number available"),
-                "file_path": doc_metadata.get("file_path"),
-                "format": doc_metadata.get("format", "no format available"),
-                "title": doc_metadata.get("title", "title is not available"),
-                "content": doc_content,
+                "source": doc.metadata.get("source", "No source available"),
+                "page": doc.metadata.get("page", "no page number available"),
+                "file_path": doc.metadata.get("file_path"),
+                "format": doc.metadata.get("format", "no format available"),
+                "title": doc.metadata.get("title", "title is not available"),
+                "content": doc.page_content,
             }
-            context_parts.append(content)
             source_metadata.append(metadata)
-        context = "\n\n".join(context_parts)
-        return context, source_metadata
+        return source_metadata
+
+    async def add_docs(self,docs):
+        logger.info(f"Documents are added.")
+        await self.retriever.aadd_documents(docs=docs)
