@@ -6,6 +6,8 @@ from functools import (
     lru_cache,
 )  # to cache the function for same parameters, loads first time then cached.
 
+from pathlib import Path
+
 
 class Settings(BaseSettings):
 
@@ -14,15 +16,18 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str
     OPENROUTER_API_KEY: str
 
-    # App Information
-    APP_NAME: str = "NotebookLm"
-
     # Model Config
     CURRENT_CHAT_MODEL: str = "openai/gpt-oss-20b:free"
     TEMPERATURE: float = 0.7
-    
-    # Vector 
-    VECTOR_FOLDER:str="vectors"
+
+    # Base File Path
+    BASE_PATH: Path = Path(__file__).resolve().parents[1]
+
+    # App Information
+    APP_NAME: str = "NotebookLm"
+    APP_PATH: Path = BASE_PATH / "app"
+    # Vector
+    VECTOR_FOLDER: Path = BASE_PATH / "vectors"
 
     class Config:
         env_file = ".env"  # Look for .env file
