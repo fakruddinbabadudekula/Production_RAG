@@ -26,8 +26,14 @@ class Settings(BaseSettings):
     # App Information
     APP_NAME: str = "NotebookLm"
     APP_PATH: Path = BASE_PATH / "app"
+    
     # Vector
     VECTOR_FOLDER: Path = BASE_PATH / "vectors"
+    
+    # Data Path where uploaded files are stored
+    DATA_PATH:Path=BASE_PATH/"data"
+    # Embedding Model
+    EMBED_MODEL:str="sentence-transformers/all-MiniLM-L6-v2"
 
     class Config:
         env_file = ".env"  # Look for .env file
