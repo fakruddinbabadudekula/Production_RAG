@@ -12,6 +12,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 import logging
 from pathlib import Path
 from app.config import settings
+from dotenv import load_dotenv
+
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -19,7 +21,7 @@ from tenacity import (
     retry_if_exception_type,
     before_sleep_log,
 )
-
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -236,6 +238,7 @@ class Graph:
 
                 elif mode == "messages":
                     chunk, _ = data
+                    # print(type(chunk.content))
                     token = chunk.content if hasattr(chunk, "content") else str(chunk)
                     if not token.strip():
                         continue
@@ -368,3 +371,4 @@ class Graph:
                 user_id=self.user_id,
                 session_id=self.session_id,
             )
+        

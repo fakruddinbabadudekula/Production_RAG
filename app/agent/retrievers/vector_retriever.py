@@ -3,7 +3,7 @@ import faiss
 import os
 from pathlib import Path
 from typing import List, Tuple
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_core.documents.base import Document
 import logging
@@ -140,6 +140,7 @@ class Retriever:
             docs_ids=id's of the added docs in vectors
         """
         docs_ids = await self.vector_db.aadd_documents(docs)
+        self.vector_db.save_local(self.vector_dir_path)
         logger.info(f"Successfully added the docs into {self.vector_dir_path}")
         return docs_ids
 
@@ -183,7 +184,7 @@ class Retriever:
     async def _aget_top_k_internal(self, query: str) -> List[Document] | None:
         """Internal method to get_top_k docs"""
         top_docs = await self.retriever.ainvoke(query)
-        logger.info(f"Successfully Retrived the top_k docs for {query}")
+        logger.info(f"Successfully Perform the Top-K Retriever {query}")
         return top_docs
 
     async def aget_top_k(self, query: str) -> List[Document] | None:

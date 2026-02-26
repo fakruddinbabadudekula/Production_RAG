@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"  # Look for .env file
         case_sensitive = True
+        extra = "ignore"
 
 
 @lru_cache()
