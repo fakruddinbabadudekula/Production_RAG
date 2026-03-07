@@ -1,5 +1,4 @@
 # In this file create the langgraph agent class which is retrieve the top k results and give the answer to the user query
-from re import S
 from langchain_core.documents.base import Document
 from langchain_core.messages import AIMessage
 from app.agent.retrievers.vector_retriever import Retriever
@@ -13,7 +12,9 @@ import logging
 from pathlib import Path
 from app.config import settings
 from dotenv import load_dotenv
-
+from langfuse.langchain import CallbackHandler
+from langchain_core.runnables import RunnableConfig
+from functools import lru_cache
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -21,11 +22,13 @@ from tenacity import (
     retry_if_exception_type,
     before_sleep_log,
 )
+
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+@lru_cache()
 def get_retriever(vector_path: Path):
     """Return the retriever Object"""
     return Retriever(vector_dir_path=vector_path)
@@ -62,7 +65,7 @@ class GraphError(Exception):
 
 
 class Graph:
-    def __init__(self, user_id: str, session_id: str):
+    def __init__(self):
         """
         LangGraph-based RAG agent for retrieval and response generation.
 
@@ -79,12 +82,8 @@ class Graph:
             ValueError: If vector path validation fails.
         """
         self.llm = get_llm()
-        self.user_id = user_id
-        self.session_id = session_id
-        self.vector_path = self._get_vector_path(user_id=user_id, session_id=session_id)
         self.saver: InMemorySaver = InMemorySaver()
         self.graph: CompiledStateGraph = self._get_graph()
-        self.retriever: Retriever = get_retriever(self.vector_path)
 
     @staticmethod
     def _get_vector_path(user_id: str, session_id: str) -> Path:
@@ -122,7 +121,9 @@ class Graph:
             raise
 
     @retry(
-        stop=stop_after_attempt(5),  #Try 5 times (patient retry for expensive LLM calls)
+        stop=stop_after_attempt(
+            5
+        ),  # Try 5 times (patient retry for expensive LLM calls)
         wait=wait_exponential(multiplier=1, min=2, max=32),  # 2s, 4s, 8s, 16s, 32s
         retry=retry_if_exception_type(RETRYABLE_LLM_EXCEPTIONS),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -131,7 +132,7 @@ class Graph:
     async def _llm_invoke(self, final_prompt: str) -> AIMessage:
         return await self.llm.ainvoke(final_prompt)
 
-    async def _chat(self, state: GraphState):
+    async def _chat(self, state: GraphState, config: RunnableConfig):
         """Generate an LLM response using retrieved documents.
 
         Args:
@@ -147,6 +148,10 @@ class Graph:
         final_prompt = self._final_prompt_with_sources(
             query=state["messages"][-1].content, sources_data=state["retrieved_docs"]
         )
+        user_id, session_id = (
+            config["metadata"]["user_id"],
+            config["metadata"]["session_id"],
+        )
         try:
             response = await self._llm_invoke(final_prompt)
         except RETRYABLE_LLM_EXCEPTIONS as e:
@@ -159,18 +164,18 @@ class Graph:
                 message=error_msg,
                 operation=f"LLm_Invoke",
                 original_error=e,
-                user_id=self.user_id,
-                session_id=self.session_id,
+                user_id=config["metadata"]["user_id"],
+                session_id=config["metadata"]["session_id"],
             )
         except Exception as e:
             logger.error(
-                f"Unknown Error Occured while invoking the llm->{str(e)} for user_id: {self.user_id} in session_id: {self.session_id}"
+                f"Unknown Error Occured while invoking the llm->{str(e)} for user_id: {user_id} in session_id: {session_id}"
             )
             raise
         logger.info(f"Response is generated successfully for {state['messages']}")
         return {"messages": [response]}
 
-    async def _retriever(self, state: GraphState):
+    async def _retriever(self, state: GraphState, config: RunnableConfig):
         """Retrieve top-k relevant documents for the query.
 
         Args:
@@ -183,8 +188,14 @@ class Graph:
             Exception: If retrieval fails.
         """
         query = state["messages"][-1].content
+        user_id, session_id = (
+            config["metadata"]["user_id"],
+            config["metadata"]["session_id"],
+        )
+        vector_path = self._get_vector_path(user_id=user_id, session_id=session_id)
+        retriever = get_retriever(vector_path=vector_path)
         try:
-            top_k_docs = await self.retriever.aget_top_k(query=query)
+            top_k_docs = await retriever.aget_top_k(query=query)
             sources_data = self._formate_docs_to_list_dict(top_k_docs=top_k_docs)
         except Exception as e:
             error_msg = (
@@ -197,16 +208,20 @@ class Graph:
                 message=error_msg,
                 operation=f"Retrieving",
                 original_error=e,
-                user_id=self.user_id,
-                session_id=self.session_id,
+                user_id=user_id,
+                session_id=session_id,
             )
         return {"retrieved_docs": sources_data}
 
-    async def get_response_stream(self, query: str) -> AsyncIterator[Dict]:
+    async def get_response_stream(
+        self, query: str, user_id: str, session_id: str
+    ) -> AsyncIterator[Dict]:
         """Stream retrieved documents and generated response tokens.
 
         Args:
             query: User query string.
+            user_id: User unique id
+            session_id: Unique session id for multi conversation
 
         Yields:
             Dict: Streaming event dictionary containing either:
@@ -222,7 +237,9 @@ class Graph:
             raise ValueError(f"query should not be empty.")
         try:
             config = {
-                "configurable": {"thread_id": self.session_id},
+                "configurable": {"thread_id": session_id},
+                "callbacks": [CallbackHandler()],
+                "metadata": {"user_id": user_id, "session_id": session_id},
             }
             async for mode, data in self.graph.astream(
                 {"messages": [query]},
@@ -255,8 +272,8 @@ class Graph:
                 message=error_msg,
                 operation=f"Streaming",
                 original_error=e,
-                user_id=self.user_id,
-                session_id=self.session_id,
+                user_id=user_id,
+                session_id=session_id,
             )
 
     def _final_prompt_with_sources(
@@ -273,7 +290,7 @@ class Graph:
         """
         if not sources_data:
             logger.info(f"No relavant docs are found for the query {query}")
-            final_prompt = query
+            final_prompt = f"{query} Answer only if you know with certainty, otherwise say you don't know."
         else:
             content = []
             for i, data in enumerate(sources_data):
@@ -282,7 +299,8 @@ class Graph:
             final_prompt = self._create_rag_prompt(query=query, context=context)
         return final_prompt
 
-    def _create_rag_prompt(self, query: str, context: str) -> str:
+    @staticmethod
+    def _create_rag_prompt(query: str, context: str) -> str:
         """Construct a citation-enforced RAG prompt.
 
         Args:
@@ -310,7 +328,8 @@ class Graph:
 
         return prompt
 
-    def _formate_docs_to_list_dict(self, top_k_docs):
+    @staticmethod
+    def _formate_docs_to_list_dict(top_k_docs):
         """Convert retrieved Document objects into serializable metadata dictionaries.
 
         Args:
@@ -327,6 +346,9 @@ class Graph:
                 "content"
         """
         source_metadata = []
+        if not top_k_docs:
+            return []
+        
         for i, doc in enumerate(top_k_docs):
             metadata = {
                 "index": i + 1,
@@ -339,36 +361,3 @@ class Graph:
             }
             source_metadata.append(metadata)
         return source_metadata
-
-    async def add_docs(self, docs: List[Document]) -> list[str]:
-        """Add documents to the vector store.
-
-        Args:
-            docs: List of LangChain Document objects.
-
-        Raises:
-            ValueError: If the document list is empty.
-            Exception: If adding documents fails.
-
-        Return:
-            list[str]: Ids of the docs in vector_db
-        """
-        if len(docs) == 0 or not docs:
-            logger.error(f"Documents list must contain at least one document.")
-            raise ValueError(f"Documents list must contain at least one document")
-        try:
-            return await self.retriever.aadd_documents(docs=docs)
-        except Exception as e:
-            error_msg = (
-                f"Failed to add {len(docs)} documents. "
-                f"Error: {type(e).__name__}: {str(e)}"
-            )
-            logger.error(error_msg)
-            raise GraphError(
-                message=error_msg,
-                operation=f"Adding_Docs",
-                original_error=e,
-                user_id=self.user_id,
-                session_id=self.session_id,
-            )
-        

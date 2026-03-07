@@ -117,10 +117,10 @@ class Retriever:
         else:
             logger.info(f"Creating vector dir {self.vector_dir_path}")
             os.makedirs(self.vector_dir_path, exist_ok=True)
-            self.index = faiss.IndexFlatL2(self.embeddings_len)
+            index = faiss.IndexFlatL2(self.embeddings_len)
             vector_db = FAISS(
                 embedding_function=self.embeddings,
-                index=self.index,
+                index=index,
                 docstore=InMemoryDocstore(),
                 index_to_docstore_id={},
             )
@@ -140,7 +140,6 @@ class Retriever:
             docs_ids=id's of the added docs in vectors
         """
         docs_ids = await self.vector_db.aadd_documents(docs)
-        self.vector_db.save_local(self.vector_dir_path)
         logger.info(f"Successfully added the docs into {self.vector_dir_path}")
         return docs_ids
 
@@ -160,7 +159,9 @@ class Retriever:
             logger.error(f"Docs must be atleast one.")
             raise ValueError(f"Docs must be atleast one.Passed empty")
         try:
-            return await self._aadd_documents_internal(docs)
+            ids=await self._aadd_documents_internal(docs)
+            self.vector_db.save_local(self.vector_dir_path)
+            return ids
         except RETRYABLE_VECTOR_EXCEPTIONS as v_e:
             raise VectorStoreError(
                 f"Failed to add documents into vector store after retries",
