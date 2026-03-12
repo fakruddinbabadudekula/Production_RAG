@@ -1,30 +1,23 @@
 # In this file create the langgraph agent class which is retrieve the top k results and give the answer to the user query
-from langchain_core.documents.base import Document
-from langchain_core.messages import AIMessage
-from app.agent.retrievers.vector_retriever import Retriever
+from app.core.agent.retrievers.vector_retriever import Retriever
 from langgraph.graph import StateGraph, END, START
 from typing import List, Dict, AsyncIterator
-from app.agent.models import get_llm
+from app.services.llm import llm_service
 from app.schemas.agent import GraphState
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.checkpoint.memory import InMemorySaver
 import logging
 from pathlib import Path
-from app.config import settings
 from dotenv import load_dotenv
 from langfuse.langchain import CallbackHandler
 from langchain_core.runnables import RunnableConfig
 from functools import lru_cache
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
-)
+from app.utils.graph import get_vector_path
+from app.core.exceptions import GraphError, VectorStoreError
+from app.core.config import settings
+
 
 load_dotenv()
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -32,36 +25,6 @@ logger = logging.getLogger(__name__)
 def get_retriever(vector_path: Path):
     """Return the retriever Object"""
     return Retriever(vector_dir_path=vector_path)
-
-
-RETRYABLE_LLM_EXCEPTIONS = (
-    ConnectionError,  # Network issues
-    TimeoutError,  # API timeout
-    # Catch provider-specific errors (RateLimitError, etc.)
-    # e.g., openai.RateLimitError, openai.APIConnectionError, etc.
-)
-
-
-class GraphError(Exception):
-    """Custom exception for graph operations."""
-
-    def __init__(
-        self,
-        message: str,
-        operation: str,
-        original_error: Exception,
-        user_id: str,
-        session_id: str,
-    ):
-        full_message = f"{message}. Original error: {type(original_error).__name__}: {str(original_error)}"
-        logger.error(
-            f"message: {full_message} | operation: {operation} exception: {str(original_error)}| user_id/session_id: {user_id}/{session_id}"
-        )
-        super().__init__(full_message)
-        self.operation = operation
-        self.original_error = original_error
-        self.user_id = user_id
-        self.session_id = session_id
 
 
 class Graph:
@@ -81,22 +44,9 @@ class Graph:
         Raises:
             ValueError: If vector path validation fails.
         """
-        self.llm = get_llm()
+        self.llm_service = llm_service
         self.saver: InMemorySaver = InMemorySaver()
         self.graph: CompiledStateGraph = self._get_graph()
-
-    @staticmethod
-    def _get_vector_path(user_id: str, session_id: str) -> Path:
-        """Sanitize the file path
-        raises:
-            - ValueError: If any other paths are given
-        """
-        vector_dir_path = (settings.VECTOR_FOLDER / user_id / session_id).resolve()
-        if not vector_dir_path.is_relative_to(settings.VECTOR_FOLDER):
-            raise ValueError(
-                f"Vector file address must be within the limit.Path=> {vector_dir_path}"
-            )
-        return vector_dir_path
 
     def _get_graph(self) -> CompiledStateGraph:
         """Build and compile the LangGraph workflow.
@@ -105,7 +55,7 @@ class Graph:
             CompiledStateGraph: Compiled graph with retriever and chat nodes.
 
         Raises:
-            Exception: If graph compilation fails.
+            GraphError: If graph compilation fails.
         """
         try:
             workflow = StateGraph(GraphState)
@@ -115,22 +65,14 @@ class Graph:
             workflow.add_edge("retriever", "chat")
             workflow.add_edge("chat", END)
             graph = workflow.compile(checkpointer=self.saver)
+            logger.info("graph_compiled")
             return graph
         except Exception as e:
-            logger.error(f"{str(e)}")
-            raise
-
-    @retry(
-        stop=stop_after_attempt(
-            5
-        ),  # Try 5 times (patient retry for expensive LLM calls)
-        wait=wait_exponential(multiplier=1, min=2, max=32),  # 2s, 4s, 8s, 16s, 32s
-        retry=retry_if_exception_type(RETRYABLE_LLM_EXCEPTIONS),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,  # Raise the original exception after all retries fail
-    )
-    async def _llm_invoke(self, final_prompt: str) -> AIMessage:
-        return await self.llm.ainvoke(final_prompt)
+            raise GraphError(
+                "Unkown_excepiton or compilation fails",
+                operation="creating_and_compiling_graph",
+                original_error=e,
+            ) from e
 
     async def _chat(self, state: GraphState, config: RunnableConfig):
         """Generate an LLM response using retrieved documents.
@@ -153,26 +95,27 @@ class Graph:
             config["metadata"]["session_id"],
         )
         try:
-            response = await self._llm_invoke(final_prompt)
-        except RETRYABLE_LLM_EXCEPTIONS as e:
+            response = await self.llm_service.call(final_prompt)
+        except settings.RETRYABLE_LLM_EXCEPTIONS as e:
             error_msg = (
-                f"Failed to invoke the llm. "
+                f"Failed to invoke the llm. After {settings.MAX_LLM_CALL_RETRIES} retries "
                 f"Query: '{final_prompt[:50]}...'. "
-                f"Error: {type(e).__name__}: {str(e)}"
             )
             raise GraphError(
                 message=error_msg,
-                operation=f"LLm_Invoke",
+                operation=f"LLM_invoke",
                 original_error=e,
-                user_id=config["metadata"]["user_id"],
-                session_id=config["metadata"]["session_id"],
-            )
+                user_id=user_id,
+                session_id=session_id,
+            ) from e
         except Exception as e:
-            logger.error(
-                f"Unknown Error Occured while invoking the llm->{str(e)} for user_id: {user_id} in session_id: {session_id}"
-            )
-            raise
-        logger.info(f"Response is generated successfully for {state['messages']}")
+            raise GraphError(
+                message="unkown_error",
+                operation="LLM_invoke",
+                original_error=e,
+                user_id=user_id,
+                session_id=session_id,
+            ) from e
         return {"messages": [response]}
 
     async def _retriever(self, state: GraphState, config: RunnableConfig):
@@ -185,32 +128,20 @@ class Graph:
             Dict: Updated state containing retrieved document metadata.
 
         Raises:
-            Exception: If retrieval fails.
+            VectorStoreError: If retrieval fails.
         """
         query = state["messages"][-1].content
         user_id, session_id = (
             config["metadata"]["user_id"],
             config["metadata"]["session_id"],
         )
-        vector_path = self._get_vector_path(user_id=user_id, session_id=session_id)
+        vector_path = get_vector_path(user_id=user_id, session_id=session_id)
         retriever = get_retriever(vector_path=vector_path)
-        try:
-            top_k_docs = await retriever.aget_top_k(query=query)
-            sources_data = self._formate_docs_to_list_dict(top_k_docs=top_k_docs)
-        except Exception as e:
-            error_msg = (
-                f"Failed to retrieve documents. "
-                f"Query: '{query[:50]}...'. "
-                f"Error: {type(e).__name__}: {str(e)}"
-            )
-            logger.error(error_msg)
-            raise GraphError(
-                message=error_msg,
-                operation=f"Retrieving",
-                original_error=e,
-                user_id=user_id,
-                session_id=session_id,
-            )
+        logger.info("got_retriever_successfully vector_path= %s",vector_path)
+        top_k_docs = await retriever.aget_top_k(query=query)
+        logger.info("retreived_top_k_docs")
+        sources_data = self._formate_docs_to_list_dict(top_k_docs=top_k_docs)
+
         return {"retrieved_docs": sources_data}
 
     async def get_response_stream(
@@ -241,6 +172,7 @@ class Graph:
                 "callbacks": [CallbackHandler()],
                 "metadata": {"user_id": user_id, "session_id": session_id},
             }
+            logger.info("started_graph_streaming")
             async for mode, data in self.graph.astream(
                 {"messages": [query]},
                 stream_mode=["messages", "updates"],
@@ -248,33 +180,32 @@ class Graph:
             ):
                 if mode == "updates":
                     if data.get("retriever", None):
-                        logger.info(f"Started Top_k_docs Streaming.")
+                        logger.info(f"started_top_k_streaming")
                         top_k_docs = data.get("retriever").get("retrieved_docs", [])
                         yield {"type": "top_k_docs", "data": top_k_docs}
-                        logger.info("Top_k_docs streaming is completed")
+                        logger.info("complited_top_k_streaming")
 
                 elif mode == "messages":
                     chunk, _ = data
-                    # print(type(chunk.content))
                     token = chunk.content if hasattr(chunk, "content") else str(chunk)
                     if not token.strip():
                         continue
                     yield {"type": "token", "value": token}
-            logger.info(f"Chat Streaming is Completed.")
-            logger.info("Streaming is completed")
+            logger.info("complited_graph_streaming")
         except GraphError:
             # Re-raise GraphError (already has context)
             raise
+        except VectorStoreError:
+            raise
         except Exception as e:
-            error_msg = f"Streaming failed: {type(e).__name__}: {str(e)}"
-            logger.error(error_msg)
+            error_msg = f"Streaming failed."
             raise GraphError(
                 message=error_msg,
-                operation=f"Streaming",
+                operation=f"streaming",
                 original_error=e,
                 user_id=user_id,
                 session_id=session_id,
-            )
+            ) from e
 
     def _final_prompt_with_sources(
         self, query: str, sources_data: List[Dict] | None
@@ -289,7 +220,6 @@ class Graph:
             str: Constructed RAG prompt.
         """
         if not sources_data:
-            logger.info(f"No relavant docs are found for the query {query}")
             final_prompt = f"{query} Answer only if you know with certainty, otherwise say you don't know."
         else:
             content = []
@@ -348,7 +278,7 @@ class Graph:
         source_metadata = []
         if not top_k_docs:
             return []
-        
+
         for i, doc in enumerate(top_k_docs):
             metadata = {
                 "index": i + 1,

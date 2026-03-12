@@ -8,6 +8,8 @@ from functools import (
 
 from pathlib import Path
 
+from regex import P
+
 
 class Settings(BaseSettings):
 
@@ -21,24 +23,37 @@ class Settings(BaseSettings):
     TEMPERATURE: float = 0.7
 
     # Base File Path
-    BASE_PATH: Path = Path(__file__).resolve().parents[1]
+    BASE_PATH: Path = Path(__file__).resolve().parents[2]
 
     # App Information
     APP_NAME: str = "NotebookLm"
     APP_PATH: Path = BASE_PATH / "app"
-    
+
+    # Storage Path
+    STORAGE_PATH: Path = BASE_PATH / "storage"
+
     # Vector
-    VECTOR_FOLDER: Path = BASE_PATH / "vectors"
-    
+    VECTOR_FOLDER: Path = STORAGE_PATH / "vectors"
+
     # Data Path where uploaded files are stored
-    DATA_PATH:Path=BASE_PATH/"data"
+    DATA_PATH: Path = STORAGE_PATH / "data"
+
     # Embedding Model
-    EMBED_MODEL:str="sentence-transformers/all-MiniLM-L6-v2"
+    EMBED_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBED_MODEL_SIZE: int = 384
+
+    # Timeouts
+    CHAT_MODEL_TIMEOUT: int = 30
+    LLM_CALL_ASYNC_TIMEOUT: int = 40
 
     class Config:
         env_file = ".env"  # Look for .env file
         case_sensitive = True
         extra = "ignore"
+
+    # Retries
+    MAX_LLM_CALL_RETRIES: int = 3
+    MAX_PDF_PROCESS_RETRY: int = 3
 
 
 @lru_cache()

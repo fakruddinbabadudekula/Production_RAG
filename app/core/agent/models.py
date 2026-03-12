@@ -1,7 +1,7 @@
 # In this code we explore the different types of models and export 
 from functools import lru_cache
 from langchain_openai import ChatOpenAI
-from app.config import settings
+from app.core.config import settings
 
 @lru_cache()
 def get_llm():
@@ -11,5 +11,7 @@ def get_llm():
     base_url=settings.OPENROUTER_BASE_URL,
     model=settings.CURRENT_CHAT_MODEL,
     temperature=settings.TEMPERATURE,
-    streaming=True
+    streaming=True,
+    timeout=settings.CHAT_MODEL_TIMEOUT,
+    max_retries=0
   )
