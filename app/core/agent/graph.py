@@ -206,6 +206,57 @@ class Graph:
                 user_id=user_id,
                 session_id=session_id,
             ) from e
+    async def get_response(self, query: str, user_id: str, session_id: str):
+        """Return retrieved documents and generated response tokens.
+
+        Args:
+            query: User query string.
+            user_id: User unique id
+            session_id: Unique session id for multi conversation
+
+        Return:
+            Dict: Return dict with top_k_docs and response:
+                - {"top_k_docs":docs[...],
+                    "response":str,
+                    }
+
+        Raises:
+            ValueError: If query is empty.
+            GraphError: If execution fails after retries
+            Exception: If execution fails.
+        """
+        if not query or not query.strip():
+            raise ValueError(f"query should not be empty.")
+        try:
+            config = {
+                "configurable": {"thread_id": session_id},
+                "callbacks": [CallbackHandler()],
+                "metadata": {"user_id": user_id, "session_id": session_id},
+            }
+            logger.info("started_graph_streaming")
+            response=await self.graph.ainvoke(
+                {"messages": [query]},
+                config=config,
+            )
+            logger.info("complited_graph_streaming")
+            return {
+                'top_k_docs':response['retrieved_docs'],
+                'response':response['messages']
+            }
+        except GraphError:
+            # Re-raise GraphError (already has context)
+            raise
+        except VectorStoreError:
+            raise
+        except Exception as e:
+            error_msg = f"Streaming failed."
+            raise GraphError(
+                message=error_msg,
+                operation=f"streaming",
+                original_error=e,
+                user_id=user_id,
+                session_id=session_id,
+            ) from e
 
     def _final_prompt_with_sources(
         self, query: str, sources_data: List[Dict] | None

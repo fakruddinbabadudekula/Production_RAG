@@ -14,7 +14,6 @@ from regex import P
 class Settings(BaseSettings):
 
     # API keys....
-    GOOGLE_API_KEY: str
     OPENROUTER_BASE_URL: str
     OPENROUTER_API_KEY: str
 
@@ -42,6 +41,19 @@ class Settings(BaseSettings):
     EMBED_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     EMBED_MODEL_SIZE: int = 384
 
+    # DataBase
+    DATABASE_URL:str
+    
+    # Password Hashing
+    HASHING_ALGO:str="argon2"
+    
+    # Authentication
+    ACCESS_TOKEN_EXPIRE_MINUTES:int
+    REFRESH_TOKEN_EXPIRE_DAYS:int
+    SECRET_KEY:str
+    ALGORITHM:str
+    
+    
     # Timeouts
     CHAT_MODEL_TIMEOUT: int = 30
     LLM_CALL_ASYNC_TIMEOUT: int = 40
