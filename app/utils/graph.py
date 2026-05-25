@@ -8,7 +8,7 @@ def get_vector_path(user_id: str, session_id: str) -> Path:
         raises:
             - ValueError: If any other paths are given
         """
-        vector_dir_path = (settings.VECTOR_FOLDER / user_id / session_id).resolve()
+        vector_dir_path = (settings.VECTOR_FOLDER / str(user_id) / str(session_id)).resolve()
         if not vector_dir_path.is_relative_to(settings.VECTOR_FOLDER):
             raise ValueError(
                 f"Vector file address must be within the limit.Path=> {vector_dir_path}"

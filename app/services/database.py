@@ -1,11 +1,16 @@
 
+from typing import Optional,List
+from functools import lru_cache
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.auth import RegisterUser,DeleteUser
 from app.utils.security import hash_password,verify_password
 from app.models.user import User
+from app.models.session import Session
+from app.models.message import Message
 from fastapi import HTTPException
-class AuthServices():
+import uuid
+class DataBaseService():
     
     async def create_user(self,user:RegisterUser,db:AsyncSession):
         if not await self.__get_user(user.email,db):
@@ -18,7 +23,33 @@ class AuthServices():
         
         # but you doesn't return None you should raise an error with message of already exist.
         return None
-   
+    async def verify_session(self,session_id:uuid.UUID,current_user_id:uuid.UUID,db:AsyncSession)->bool:
+        session=await db.get(Session,session_id)
+        if not session or session.user_id!= current_user_id:
+            return False
+        else:
+            return True
+    async def create_session(self,user_id:uuid.UUID,db:AsyncSession,title:str=None)->Session:
+        new_session=Session(title=title,user_id=user_id)
+        db.add(new_session)
+        await db.commit()
+        await db.refresh(new_session)
+        return new_session
+            
+    async def get_sessions(self,user_id:uuid.UUID,db:AsyncSession)->List[Session]:
+        result=await db.execute(
+            select(Session)
+        .where(Session.user_id == user_id)
+        .order_by(Session.created_at.desc())
+        )
+        return result.scalars().all()
+    async def get_messages(self,session_id:uuid.UUID,db:AsyncSession)->List[Message]:
+        result=await db.execute(
+            select(Message)
+        .where(Message.session_id == session_id)
+        .order_by(Message.created_at.desc())
+        )
+        return result.scalars().all()
     @staticmethod
     async def __get_user(user_email:str,db:AsyncSession):
         
@@ -44,3 +75,13 @@ class AuthServices():
             await db.commit()
             return user
         raise HTTPException(status_code=404,detail="User not found or invalid username or password")
+    
+    
+
+@lru_cache(maxsize=1)
+def get_db_service() -> DataBaseService:
+    return DataBaseService()
+
+
+# For stateless reusable across the files, intialize only once.
+db_service=get_db_service()

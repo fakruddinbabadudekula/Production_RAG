@@ -15,11 +15,25 @@ from functools import lru_cache
 from app.utils.graph import get_vector_path
 from app.core.exceptions import GraphError, VectorStoreError
 from app.core.config import settings
-
+from langchain_core.messages import BaseMessage
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+from openai import (
+    APITimeoutError,
+    APIConnectionError,
+    RateLimitError,
+    InternalServerError,
+)
 
+RETRYABLE_LLM_EXCEPTIONS = (
+    APITimeoutError,
+    APIConnectionError,
+    RateLimitError,
+    InternalServerError,
+    TimeoutError,
+    ConnectionError,
+)
 
 @lru_cache()
 def get_retriever(vector_path: Path):
@@ -64,7 +78,7 @@ class Graph:
             workflow.add_edge(START, "retriever")
             workflow.add_edge("retriever", "chat")
             workflow.add_edge("chat", END)
-            graph = workflow.compile(checkpointer=self.saver)
+            graph = workflow.compile()
             logger.info("graph_compiled")
             return graph
         except Exception as e:
@@ -96,7 +110,7 @@ class Graph:
         )
         try:
             response = await self.llm_service.call(final_prompt)
-        except settings.RETRYABLE_LLM_EXCEPTIONS as e:
+        except RETRYABLE_LLM_EXCEPTIONS as e:
             error_msg = (
                 f"Failed to invoke the llm. After {settings.MAX_LLM_CALL_RETRIES} retries "
                 f"Query: '{final_prompt[:50]}...'. "
@@ -168,7 +182,6 @@ class Graph:
             raise ValueError(f"query should not be empty.")
         try:
             config = {
-                "configurable": {"thread_id": session_id},
                 "callbacks": [CallbackHandler()],
                 "metadata": {"user_id": user_id, "session_id": session_id},
             }
@@ -206,11 +219,11 @@ class Graph:
                 user_id=user_id,
                 session_id=session_id,
             ) from e
-    async def get_response(self, query: str, user_id: str, session_id: str):
+    async def get_response(self, messages: List[BaseMessage], user_id: str, session_id: str):
         """Return retrieved documents and generated response tokens.
 
         Args:
-            query: User query string.
+            messages:Current_message + history of messages.
             user_id: User unique id
             session_id: Unique session id for multi conversation
 
@@ -225,23 +238,23 @@ class Graph:
             GraphError: If execution fails after retries
             Exception: If execution fails.
         """
-        if not query or not query.strip():
-            raise ValueError(f"query should not be empty.")
+        print(messages)
+        if not messages or len(messages)==0:
+            raise ValueError(f"messages should not be empty.")
         try:
             config = {
-                "configurable": {"thread_id": session_id},
                 "callbacks": [CallbackHandler()],
                 "metadata": {"user_id": user_id, "session_id": session_id},
             }
             logger.info("started_graph_streaming")
             response=await self.graph.ainvoke(
-                {"messages": [query]},
+                {"messages": messages},
                 config=config,
             )
             logger.info("complited_graph_streaming")
             return {
                 'top_k_docs':response['retrieved_docs'],
-                'response':response['messages']
+                'response':response['messages'][-1]
             }
         except GraphError:
             # Re-raise GraphError (already has context)
@@ -342,3 +355,8 @@ class Graph:
             }
             source_metadata.append(metadata)
         return source_metadata
+@lru_cache(maxsize=1)
+def get_graph() -> Graph:
+    return Graph()
+# for stateless, reusable across the modules.
+graph=get_graph()

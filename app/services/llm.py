@@ -1,6 +1,6 @@
 import logging
 import asyncio
-from urllib import response
+from functools import lru_cache
 from langchain_core.messages import AIMessage
 from tenacity import (
     retry,
@@ -66,5 +66,7 @@ class LLMService:
         """For now just implemented the calling llm with final prompt and return the response"""
         return await self._call_llm_with_retries(final_prompt=final_prompt)
 
-
-llm_service = LLMService()
+@lru_cache(maxsize=1)
+def get_llm_service() -> LLMService:
+    return LLMService()
+llm_service = get_llm_service()

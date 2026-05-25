@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Response, HTTPException, status, Cookie
 from app.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.auth import LoginRequest, AccessTokenResponse
-from app.services.auth import AuthServices
+from app.services.database import DataBaseService
 from jose import JWTError
 from app.core.db import get_db
 from app.utils.security import (
@@ -14,7 +14,7 @@ from app.utils.security import (
 from app.core.dependencies import get_current_user
 
 router = APIRouter()
-auth_serivices = AuthServices()
+auth_serivices = DataBaseService()
 _DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$6j2nlBJCSCkFIMTYG4MQYg$hoq39+Hpcozusp8p1h5DtCxF1MjMiHncVfzkkekPipY"
 
 
