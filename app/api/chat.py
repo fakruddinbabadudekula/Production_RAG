@@ -3,19 +3,45 @@ from app.models.message import Message
 from app.schemas.chat import ChatRequest,ChatRespose
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user,get_db
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import (
+    HumanMessage,
+    AIMessage,
+    SystemMessage,
+    BaseMessage,
+)
+
+from app.schemas.enums import MessageRole
+from app.models.message import Message
+from typing import List
 from app.models.user import User
 from app.services.database import db_service
-from app.utils.chat import convert_msg_to_langchain_msg
 from app.core.agent.graph import graph
 
 # these are all for test case only
 from app.core.agent.document_loaders.doc_loader import DocumentLoader
 from app.core.agent.retrievers.vector_retriever import Retriever
-from app.utils.graph import get_vector_path
+from app.core.agent.graph import get_vector_path
 from pathlib import Path
 router=APIRouter()
 
+def convert_msg_to_langchain_msg(messages:List[Message])->List[BaseMessage]:
+    langchain_msgs:List[BaseMessage]=[]
+    role_mapper={
+        MessageRole.SYSTEM:SystemMessage,
+        MessageRole.USER:HumanMessage,
+        MessageRole.ASSISTANT:AIMessage
+    }
+    
+    for message in messages:
+        mapper_class=role_mapper.get(message.role)
+        if not mapper_class:
+            raise ValueError(
+                f"Unsupported message role: {message.role}"
+            )
+        langchain_msgs.append(mapper_class(
+            content=message.content
+        ))
+    return langchain_msgs
 async def add_docs(user_id,session_id):
     path = "storage/data/attention is all you need.pdf"
     doc_loader = DocumentLoader()

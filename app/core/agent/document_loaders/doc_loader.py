@@ -157,3 +157,9 @@ class DocumentLoader:
 
         logger.info("processed_pdf= file %s chunks= %s duration= %.3fs", file_path.name, len(docs),chunks_duration)
         return docs
+
+@lru_cache()
+def get_doc_loader():
+    return DocumentLoader()
+
+doc_loader=get_doc_loader()

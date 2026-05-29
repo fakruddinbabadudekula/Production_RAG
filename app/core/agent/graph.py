@@ -1,5 +1,5 @@
 # In this file create the langgraph agent class which is retrieve the top k results and give the answer to the user query
-from app.core.agent.retrievers.vector_retriever import Retriever
+from app.core.agent.retrievers.vector_retriever import get_retriever
 from langgraph.graph import StateGraph, END, START
 from typing import List, Dict, AsyncIterator
 from app.services.llm import llm_service
@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 from langfuse.langchain import CallbackHandler
 from langchain_core.runnables import RunnableConfig
 from functools import lru_cache
-from app.utils.graph import get_vector_path
 from app.core.exceptions import GraphError, VectorStoreError
 from app.core.config import settings
 from langchain_core.messages import BaseMessage
@@ -35,12 +34,19 @@ RETRYABLE_LLM_EXCEPTIONS = (
     ConnectionError,
 )
 
-@lru_cache()
-def get_retriever(vector_path: Path):
-    """Return the retriever Object"""
-    return Retriever(vector_dir_path=vector_path)
 
 
+def get_vector_path(user_id: str, session_id: str) -> Path:
+        """Sanitize the file path
+        raises:
+            - ValueError: If any other paths are given
+        """
+        vector_dir_path = (settings.VECTOR_FOLDER / str(user_id) / str(session_id)).resolve()
+        if not vector_dir_path.is_relative_to(settings.VECTOR_FOLDER):
+            raise ValueError(
+                f"Vector file address must be within the limit.Path=> {vector_dir_path}"
+            )
+        return vector_dir_path
 class Graph:
     def __init__(self):
         """
@@ -150,7 +156,7 @@ class Graph:
             config["metadata"]["session_id"],
         )
         vector_path = get_vector_path(user_id=user_id, session_id=session_id)
-        retriever = get_retriever(vector_path=vector_path)
+        retriever = get_retriever(vector_dir_path=vector_path)
         logger.info("got_retriever_successfully vector_path= %s",vector_path)
         top_k_docs = await retriever.aget_top_k(query=query)
         logger.info("retreived_top_k_docs")

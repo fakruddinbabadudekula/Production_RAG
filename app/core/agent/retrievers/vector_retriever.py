@@ -3,12 +3,13 @@ import faiss
 import os
 from pathlib import Path
 from typing import List
-from app.utils.retriever import load_embeddings
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_core.documents.base import Document
 import logging
 from app.core.config import settings
 from app.core.exceptions import VectorStoreError
+from langchain_huggingface import HuggingFaceEmbeddings
+from functools import lru_cache
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -27,7 +28,16 @@ RETRYABLE_VECTOR_EXCEPTIONS = (
     RuntimeError,  # FAISS internal errors (sometimes transient)
 )
 
+@lru_cache()
+def load_embeddings() -> HuggingFaceEmbeddings:
+    """Load and cache the HuggingFace embedding model.
 
+    Returns:
+        HuggingFaceEmbeddings: Cached embedding model instance.
+        length: no of dimension are there.
+    """
+    # here All minilm models have the 384 dimension
+    return HuggingFaceEmbeddings(model_name=settings.EMBED_MODEL)
 class Retriever:
     """FAISS-based vector store retriever with persistence support.
 
@@ -217,3 +227,8 @@ class Retriever:
                 file_path=self.vector_dir_path,
                 original_error=e,
             ) from e
+
+@lru_cache()
+def get_retriever(vector_dir_path):
+    return Retriever(vector_dir_path)
+
