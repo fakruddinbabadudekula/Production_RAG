@@ -2,13 +2,14 @@ from __future__ import annotations
 from app.core.db import Base
 from sqlalchemy.orm import Mapped,mapped_column, relationship
 from datetime import datetime, timezone
-from sqlalchemy import ForeignKey, Integer,String,DateTime,func,Text
+from sqlalchemy import Boolean, ForeignKey, Integer,String,DateTime,func,Text
 import uuid
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING,List, Optional
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.message import Message
+    from app.models.file import FileMetadata
 
 
 class Session(Base):
@@ -22,9 +23,10 @@ class Session(Base):
         nullable=False,
         primary_key=True
     )
-    title: Mapped[str]=mapped_column(String(30),nullable=False)
+    title: Mapped[Optional[str]]=mapped_column(String(30),nullable=True)
     user_id:Mapped[uuid.UUID]=mapped_column(ForeignKey("users.user_id"))
-    created_at:Mapped[DateTime]=mapped_column(DateTime(timezone=True),
+    first_prompt:Mapped[bool]=mapped_column(Boolean,default=False)
+    created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),
         server_default=func.now(),
         default= lambda :datetime.now(timezone.utc)  
     )
@@ -35,4 +37,9 @@ class Session(Base):
     )
     user: Mapped["User"] = relationship(
         back_populates="sessions"
+    )
+    files:Mapped[List['FileMetadata']]=relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="FileMetadata.created_at",
     )

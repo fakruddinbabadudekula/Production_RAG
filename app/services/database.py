@@ -8,6 +8,7 @@ from app.utils.security import hash_password,verify_password
 from app.models.user import User
 from app.models.session import Session
 from app.models.message import Message
+from app.models.file import FileMetadata
 from fastapi import HTTPException
 import uuid
 class DataBaseService():
@@ -75,7 +76,13 @@ class DataBaseService():
             await db.commit()
             return user
         raise HTTPException(status_code=404,detail="User not found or invalid username or password")
-    
+    async def add_file(self,file_id:uuid.UUID,name:str,type:str,session_id:uuid.UUID,db:AsyncSession):
+        new_file=FileMetadata(type=type,session_id=session_id,file_id=file_id,name=name)
+        db.add(new_file)
+        await db.commit()
+        await db.refresh(new_file)
+        return new_file
+        
     
 
 @lru_cache(maxsize=1)

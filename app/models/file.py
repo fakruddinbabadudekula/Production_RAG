@@ -1,20 +1,18 @@
-from typing import List
 
-
+from app.schemas.enums import FileType
 from app.core.db import Base
 from sqlalchemy.orm import Mapped,mapped_column, relationship
 from datetime import datetime, timezone
-from sqlalchemy import ForeignKey,DateTime,func,Text,Enum as SqlEnum,JSON
+from sqlalchemy import ForeignKey, Integer,String,DateTime,func,Text,Enum as SqlEnum
 import uuid
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from app.schemas.enums import MessageRole
-from datetime import datetime
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.models.session import Session
-class Message(Base):
-    __tablename__="messages"  
-    message_id:Mapped[uuid.UUID] = mapped_column(
+    
+class FileMetadata(Base):
+    __tablename__="files_metadata"  
+    file_id:Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         default=uuid.uuid4,
         unique=True,
@@ -25,18 +23,16 @@ class Message(Base):
     session_id:Mapped[uuid.UUID]=mapped_column(
         ForeignKey("sessions.session_id")
     )
-    content:Mapped[str]=mapped_column(Text)
-    role:Mapped[MessageRole]=mapped_column(
-        SqlEnum(MessageRole),nullable=False
+    type:Mapped[FileType]=mapped_column(
+        SqlEnum(FileType)
     )
-    top_k_docs:Mapped[List|None]=mapped_column(
-        JSON,nullable=True
-        
+    name:Mapped[str]=mapped_column(
+        String(30)
     )
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),
         server_default=func.now(),
         default= lambda :datetime.now(timezone.utc)  
     )
     session: Mapped["Session"] = relationship(
-        back_populates="messages"
+        back_populates="files"
     )

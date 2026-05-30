@@ -63,7 +63,7 @@ class DocumentLoader:
             - ValueError: If file type is not supported.
             - FileNotFoundError: If file is not found
         """
-        if not file_path.resolve().is_relative_to(settings.DATA_PATH):
+        if not file_path.resolve().is_relative_to(settings.FILE_UPLOAD_PATH):
             raise ValueError(
                 f" file_must_be_in_allowed_folder. path=> {file_path.name}"
             )

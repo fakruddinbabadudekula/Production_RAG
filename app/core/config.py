@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     VECTOR_FOLDER: Path = STORAGE_PATH / "vectors"
 
     # Data Path where uploaded files are stored
-    DATA_PATH: Path = STORAGE_PATH / "data"
+    FILE_UPLOAD_PATH: Path = STORAGE_PATH / "upload_files"
 
     # Embedding Model
     EMBED_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -58,14 +58,14 @@ class Settings(BaseSettings):
     CHAT_MODEL_TIMEOUT: int = 30
     LLM_CALL_ASYNC_TIMEOUT: int = 40
 
+    # Retries
+    MAX_LLM_CALL_RETRIES: int = 3
+    MAX_PDF_PROCESS_RETRY: int = 3
     class Config:
         env_file = ".env"  # Look for .env file
         case_sensitive = True
         extra = "ignore"
 
-    # Retries
-    MAX_LLM_CALL_RETRIES: int = 3
-    MAX_PDF_PROCESS_RETRY: int = 3
 
 
 @lru_cache()
