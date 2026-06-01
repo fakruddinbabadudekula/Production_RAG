@@ -4,8 +4,7 @@ from app.core.config import settings
 
 # an asycn engine to connect the datbase.
 a_engine=create_async_engine(
-   url= settings.DATABASE_URL,
-   echo=True
+   url= settings.DATABASE_URL
 )
 
 class Base(DeclarativeBase):

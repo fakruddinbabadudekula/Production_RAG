@@ -14,6 +14,7 @@ from tenacity import (
 )
 import time
 from functools import lru_cache
+from app.services.upload_file import get_file_path
 
 from app.core.config import settings
 
@@ -57,22 +58,18 @@ class DocumentLoader:
         self.chunk_overlap = chunk_overlap
         self.supported_formats = {".pdf"}
 
-    def _validate_file(self, file_path: Path):
-        """Validate the file
+    def _validate_file(self,file_path:Path):
+        """Creates new file and validates it
         Raise:
             - ValueError: If file type is not supported.
             - FileNotFoundError: If file is not found
         """
-        if not file_path.resolve().is_relative_to(settings.FILE_UPLOAD_PATH):
-            raise ValueError(
-                f" file_must_be_in_allowed_folder. path=> {file_path.name}"
-            )
         if not file_path.exists():
             raise FileNotFoundError(f"file_not_found. file= {file_path}")
         if file_path.suffix.lower() not in self.supported_formats:
             raise ValueError(f"Unsupported_file_format. file= {file_path.name} supported_formats= {self.supported_formats}")
 
-    async def process_document(self, file_path: Path) -> List[Document]:
+    async def process_document(self, user_id:str,session_id:str,file_id:str) -> List[Document]:
         """Process a document file and return list chunked LangChain Document objects.
 
         Args:
@@ -89,7 +86,7 @@ class DocumentLoader:
             >>> process_document(Path("data/sample.pdf"))
             [Document(...), Document(...)]
         """
-
+        file_path=get_file_path(user_id,session_id,file_id)
         self._validate_file(file_path=file_path)
         logger.info("file_validated. file= %s",file_path.name)
         try:
@@ -101,22 +98,31 @@ class DocumentLoader:
             raise DocumentError(
                 message="document_process_after_retries_pdf_error",
                 operation="pdf_processing",
-                original_error=e,
-                file_path=file_path.name
+                file_path=file_path,
+                file_type=file_path.suffix.lower(),
+                file_id=file_id,
+                user_id=user_id,
+                session_id=session_id
             ) from e
         except PERMANENT_PDF_EXCEPTIONS as e:
             raise DocumentError(
                 message="document_process_permanant_error",
                 operation="pdf_processing",
-                original_error=e,
-                file_path=file_path.name
+                file_path=file_path,
+                file_type=file_path.suffix.lower(),
+                file_id=file_id,
+                user_id=user_id,
+                session_id=session_id
             ) from e
         except Exception as e:
             raise DocumentError(
                 message="document_process_unkown_error",
                 operation="pdf_processing",
-                original_error=e,
-                file_path=file_path.name
+                file_path=file_path,
+                file_type=file_path.suffix.lower(),
+                file_id=file_id,
+                user_id=user_id,
+                session_id=session_id
             ) from e
 
     @retry(

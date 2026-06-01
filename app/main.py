@@ -1,5 +1,8 @@
+
 from fastapi import FastAPI
 from app.core.db import init_db
+from app.core.logging import setup_logger
+from logging import getLogger
 from app.api.auth import router as auth_router
 from app.api.register import router as register_router
 from app.api.test import router as test_router
@@ -7,13 +10,16 @@ from contextlib import asynccontextmanager
 from app.api.chat import router as chat_router
 from app.api.history import router as history_router
 from app.api.upload import router as file_upload
+
+logger=getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app):
-    print("server is started")
+    setup_logger()
+    logger.info("Server Started")
     await init_db()
-    print("tables are created ")
+    logger.info("Tables are created ")
     yield
-    print("server is closed")
+    logger.info("Server terminated")
     
 app=FastAPI(lifespan=lifespan)
 app.include_router(auth_router,prefix="/api/v1/auth")

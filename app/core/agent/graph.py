@@ -7,7 +7,6 @@ from app.schemas.agent import GraphState
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.checkpoint.memory import InMemorySaver
 import logging
-from pathlib import Path
 from dotenv import load_dotenv
 from langfuse.langchain import CallbackHandler
 from langchain_core.runnables import RunnableConfig
@@ -15,7 +14,6 @@ from functools import lru_cache
 from app.core.exceptions import GraphError, VectorStoreError
 from app.core.config import settings
 from langchain_core.messages import BaseMessage
-from app.core.agent.retrievers.vector_retriever import get_vector_path
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -47,11 +45,6 @@ class Graph:
         using a stateful LangGraph workflow.
         Initialize the graph agent for a user session.
 
-
-        Args:
-            user_id: Unique identifier for the user.
-            session_id: Unique identifier for the session.
-
         Raises:
             ValueError: If vector path validation fails.
         """
@@ -82,7 +75,7 @@ class Graph:
             raise GraphError(
                 "Unkown_excepiton or compilation fails",
                 operation="creating_and_compiling_graph",
-                original_error=e,
+                step="orchestration"
             ) from e
 
     async def _chat(self, state: GraphState, config: RunnableConfig):
@@ -112,18 +105,20 @@ class Graph:
                 f"Failed to invoke the llm. After {settings.MAX_LLM_CALL_RETRIES} retries "
                 f"Query: '{final_prompt[:50]}...'. "
             )
+            logger.error(error_msg)
             raise GraphError(
                 message=error_msg,
                 operation=f"LLM_invoke",
-                original_error=e,
+                step="chat",
                 user_id=user_id,
                 session_id=session_id,
             ) from e
         except Exception as e:
+            logger.error("unkown_error_at_chat")
             raise GraphError(
                 message="unkown_error",
-                operation="LLM_invoke",
-                original_error=e,
+                operation="graph_response",
+                step="chat",
                 user_id=user_id,
                 session_id=session_id,
             ) from e
@@ -146,9 +141,8 @@ class Graph:
             config["metadata"]["user_id"],
             config["metadata"]["session_id"],
         )
-        vector_path = get_vector_path(user_id=user_id, session_id=session_id)
-        retriever = get_retriever(vector_dir_path=vector_path)
-        logger.info("got_retriever_successfully vector_path= %s",vector_path)
+        
+        retriever = get_retriever(user_id,session_id)
         top_k_docs = await retriever.aget_top_k(query=query)
         logger.info("retreived_top_k_docs")
         sources_data = self._formate_docs_to_list_dict(top_k_docs=top_k_docs)
@@ -211,8 +205,8 @@ class Graph:
             error_msg = f"Streaming failed."
             raise GraphError(
                 message=error_msg,
-                operation=f"streaming",
-                original_error=e,
+                operation=f"graph_response",
+                step="get_response_stream",
                 user_id=user_id,
                 session_id=session_id,
             ) from e
@@ -235,7 +229,6 @@ class Graph:
             GraphError: If execution fails after retries
             Exception: If execution fails.
         """
-        print(messages)
         if not messages or len(messages)==0:
             raise ValueError(f"messages should not be empty.")
         try:
@@ -262,8 +255,8 @@ class Graph:
             error_msg = f"Streaming failed."
             raise GraphError(
                 message=error_msg,
-                operation=f"streaming",
-                original_error=e,
+                operation=f"graph_response",
+                step="response",
                 user_id=user_id,
                 session_id=session_id,
             ) from e

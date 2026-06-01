@@ -2,11 +2,12 @@ from pydantic import BaseModel,ConfigDict
 import uuid
 from app.schemas.enums import MessageRole
 from datetime import datetime
+from typing import Optional
 
 class SessionResponse(BaseModel):
     user_id:uuid.UUID
     session_id:uuid.UUID
-    title:str
+    title:Optional[str]=None
     created_at:datetime
     model_config = ConfigDict(from_attributes=True)
     

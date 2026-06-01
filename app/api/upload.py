@@ -41,12 +41,15 @@ async def upload(
 
     # validate and store the file in file system=> return metadata of the file like size and type
     upload_file_service.validate_file(file)
-    file_path = await upload_file_service.store_file(file, user_id, session_id, file_id)
+    _ = await upload_file_service.store_file(
+        file, str(user_id), str(session_id), str(file_id)
+    )
 
     # embedd the file and store it in vector store
-    docs = await doc_loader.process_document(file_path)
-    vector_path = get_vector_path(user_id, session_id)
-    retriever = get_retriever(vector_path)
+    docs = await doc_loader.process_document(
+        str(user_id), str(session_id), str(file_id)
+    )
+    retriever = get_retriever(str(user_id), str(session_id))
     ids = await retriever.aadd_documents(docs)
     # store the metadata in database
     file_metadata = await db_service.add_file(

@@ -1,5 +1,7 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional,Any
+import uuid
+from app.schemas.enums import ErrorType
 
 
 class BaseError(Exception):
@@ -9,11 +11,15 @@ class BaseError(Exception):
         self,
         message: str,
         operation: str,
-        original_error: Optional[Exception] = None,
+        user_id:uuid.UUID,
+        session_id:Optional[uuid.UUID|None]=None 
+         
     ):
         super().__init__(message)
         self.operation = operation
-        self.original_error = original_error
+        self.session_id=session_id
+        self.user_id=user_id
+        self.message=message
 
 
 class VectorStoreError(BaseError):
@@ -23,11 +29,11 @@ class VectorStoreError(BaseError):
         self,
         message: str,
         operation: str,
-        file_path: Optional[Path] = None,
-        original_error: Optional[Exception] = None,
+        vector_dir: Optional[Path] = None,
+        **kwargs
     ):
-        super().__init__(message, operation, original_error)
-        self.file_path = file_path
+        super().__init__(message, operation, **kwargs)
+        self.vector_dir = vector_dir
 
 
 class GraphError(BaseError):
@@ -37,13 +43,11 @@ class GraphError(BaseError):
         self,
         message: str,
         operation: str,
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        original_error: Optional[Exception] = None,
+        step:str,
+        **kwargs
     ):
-        super().__init__(message, operation, original_error)
-        self.user_id = user_id
-        self.session_id = session_id
+        super().__init__(message, operation,**kwargs )
+        self.step=step
 
 
 class DocumentError(BaseError):
@@ -54,7 +58,43 @@ class DocumentError(BaseError):
         message: str,
         operation: str,
         file_path: Optional[Path] = None,
-        original_error: Optional[Exception] = None,
+        file_type:Optional[str]=None,
+        file_id:Optional[str]=None,
+        **kwargs
     ):
-        super().__init__(message, operation, original_error)
+        super().__init__(message, operation, **kwargs)
         self.file_path = file_path
+        self.file_type=file_type
+        self.file_id=file_id
+
+class DatabaseError(BaseError):
+    """DataBaser Serviec Error class """
+    def __init__(
+        self,
+        message: str,
+        operation: str,
+        service:Optional[str]=None,
+        error_type:Optional[ErrorType]=None,
+        **kwargs
+    ):
+        super().__init__(message, operation, **kwargs)
+        self.service=service
+        self.error_type=error_type
+        
+class UploadFileError(BaseError):
+    """Uploading File Error"""
+    def __init__(
+        self,
+        message: str,
+        operation: str,
+        file_path: Optional[Path] = None,
+        file_type:Optional[str]=None,
+        file_id:Optional[str]=None,
+        error_type:Optional[ErrorType]=None,
+        **kwargs
+    ):
+        super().__init__(message, operation, **kwargs)
+        self.file_path = file_path
+        self.file_type=file_type
+        self.file_id=file_id
+        self.error_type=error_type

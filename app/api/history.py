@@ -1,7 +1,6 @@
 import uuid
 
 from fastapi import APIRouter, Depends
-from requests import session
 from app.models.user import User
 from app.core.dependencies import get_current_user,get_db
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +16,6 @@ async def get_sessions(current_user:User=Depends(get_current_user),db:AsyncSessi
 
         
 @router.get("/messages",response_model=List[MessageResponse])
-async def get_sessions(session_id:uuid.UUID,current_user:User=Depends(get_current_user),db:AsyncSession=Depends(get_db)):
+async def get_messages(session_id:uuid.UUID,current_user:User=Depends(get_current_user),db:AsyncSession=Depends(get_db)):
     if session_id and await db_service.verify_session(session_id,current_user.user_id,db):
         return await db_service.get_messages(session_id,db)

@@ -1,6 +1,7 @@
 from langchain_community.vectorstores import FAISS
 import faiss
 import os
+import uuid
 from pathlib import Path
 from typing import List
 from langchain_community.docstore.in_memory import InMemoryDocstore
@@ -28,6 +29,7 @@ RETRYABLE_VECTOR_EXCEPTIONS = (
     RuntimeError,  # FAISS internal errors (sometimes transient)
 )
 
+
 @lru_cache()
 def load_embeddings() -> HuggingFaceEmbeddings:
     """Load and cache the HuggingFace embedding model.
@@ -38,17 +40,21 @@ def load_embeddings() -> HuggingFaceEmbeddings:
     """
     # here All minilm models have the 384 dimension
     return HuggingFaceEmbeddings(model_name=settings.EMBED_MODEL)
+
+
 def get_vector_path(user_id: str, session_id: str) -> Path:
-        """Sanitize the file path
-        raises:
-            - ValueError: If any other paths are given
-        """
-        vector_dir_path = (settings.VECTOR_FOLDER / str(user_id) / str(session_id)).resolve()
-        if not vector_dir_path.is_relative_to(settings.VECTOR_FOLDER):
-            raise ValueError(
-                f"Vector file address must be within the limit.Path=> {vector_dir_path}"
-            )
-        return vector_dir_path
+    """Sanitize the file path
+    raises:
+        - ValueError: If any other paths are given
+    """
+    vector_dir_path = (settings.VECTOR_FOLDER / user_id / session_id).resolve()
+    if not vector_dir_path.is_relative_to(settings.VECTOR_FOLDER):
+        raise ValueError(
+            f"Vector file address must be within the limit. Path=> {vector_dir_path}"
+        )
+    return vector_dir_path
+
+
 class Retriever:
     """FAISS-based vector store retriever with persistence support.
 
@@ -56,7 +62,7 @@ class Retriever:
     otherwise creates a new one and saves it locally.
     """
 
-    def __init__(self, vector_dir_path: Path):
+    def __init__(self, user_id:str,session_id:str):
         """Initialize the FAISS vector store and retriever.
 
         Args:
@@ -65,8 +71,8 @@ class Retriever:
             VectorStoreError: initialization failed.
 
         """
-
-        self.vector_dir_path = vector_dir_path
+        self.user_id,self.session_id=user_id,session_id
+        self.vector_dir_path = get_vector_path(user_id,session_id)
         self.embeddings = load_embeddings()
         self.embeddings_len = settings.EMBED_MODEL_SIZE
         try:
@@ -75,15 +81,17 @@ class Retriever:
             raise VectorStoreError(
                 f"initialize vector store after retries",
                 operation="initialization",
-                file_path=self.vector_dir_path,
-                original_error=e,
+                vector_dir=self.vector_dir_path,
+                session_id=self.session_id,
+                user_id=self.user_id
             ) from e
         except Exception as e:
             raise VectorStoreError(
                 f" Unkown error raised at the time of initialization",
                 operation="initialization",
-                file_path=self.vector_dir_path,
-                original_error=e,
+                vector_dir=self.vector_dir_path,
+                session_id=self.session_id,
+                user_id=self.user_id
             ) from e
         self.retriever = self.vector_db.as_retriever(
             search_type="similarity", search_kwargs={"k": 5}
@@ -110,7 +118,7 @@ class Retriever:
             )
             logger.info(
                 "Initialized existed vectore store successfully. vectorstore= %s",
-                self.vector_dir_path.name,
+                self.vector_dir_path,
             )
 
         else:
@@ -127,7 +135,7 @@ class Retriever:
             )
             vector_db.save_local(self.vector_dir_path)
             logger.info(
-                "Created new vectore store. vectorstore= %s", self.vector_dir_path
+                "Created new vectore store. vectorstore_path= %s", self.vector_dir_path
             )
 
         return vector_db
@@ -160,29 +168,31 @@ class Retriever:
          >>> await retriever.aadd_documents(docs)
         """
         if len(docs) == 0 or not docs:
-            raise ValueError(f"Docs must be atleast one.Passed empty")
+            raise ValueError(f"Docs must be atleast one. Passed empty")
         try:
             ids = await self._aadd_documents_internal(docs)
             self.vector_db.save_local(self.vector_dir_path)
             logger.info(
-                "Successfully added the %s docs into vectorestore= %s",
+                "Successfully added the %s docs into vectorestore_path= %s",
                 len(docs),
-                self.vector_dir_path.name,
+                self.vector_dir_path,
             )
             return ids
         except RETRYABLE_VECTOR_EXCEPTIONS as e:
             raise VectorStoreError(
                 f"add_documents after retries",
                 operation="adding_docs",
-                file_path=self.vector_dir_path,
-                original_error=e,
+                vector_dir=self.vector_dir_path,
+                session_id=self.session_id,
+                user_id=self.user_id
             ) from e
         except Exception as e:
             raise VectorStoreError(
                 f" Unkown_error_adding_docs",
                 operation="adding_docs",
-                file_path=self.vector_dir_path,
-                original_error=e,
+                vector_dir=self.vector_dir_path,
+                session_id=self.session_id,
+                user_id=self.user_id
             ) from e
 
     @retry(
@@ -228,18 +238,20 @@ class Retriever:
             raise VectorStoreError(
                 f"retrieving_top_docs after retries",
                 operation="retrieving_top_docs",
-                file_path=self.vector_dir_path,
-                original_error=e,
+                vector_dir=self.vector_dir_path,
+                session_id=self.session_id,
+                user_id=self.user_id
             ) from e
         except Exception as e:
             raise VectorStoreError(
                 f" Unkown_error_retrieving_top_docs",
                 operation="retrieving_top_docs",
-                file_path=self.vector_dir_path,
-                original_error=e,
+                vector_dir=self.vector_dir_path,
+                session_id=self.session_id,
+                user_id=self.user_id
             ) from e
 
-@lru_cache()
-def get_retriever(vector_dir_path):
-    return Retriever(vector_dir_path)
 
+@lru_cache()
+def get_retriever(user_id:str,session_id:str):
+    return Retriever(user_id,session_id)
