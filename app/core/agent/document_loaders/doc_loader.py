@@ -1,7 +1,12 @@
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents.base import Document
-from app.core.exceptions import DocumentError
+from app.core.exceptions import (
+    EntityNotFoundError,
+    InvalidFileType,
+    ProcessTimeOutError,
+    DocumentProcessingError,
+)
 from typing import List
 from pathlib import Path
 import logging
@@ -58,18 +63,23 @@ class DocumentLoader:
         self.chunk_overlap = chunk_overlap
         self.supported_formats = {".pdf"}
 
-    def _validate_file(self,file_path:Path):
+    def _validate_file(self, file_path: Path):
         """Creates new file and validates it
         Raise:
             - ValueError: If file type is not supported.
             - FileNotFoundError: If file is not found
         """
         if not file_path.exists():
-            raise FileNotFoundError(f"file_not_found. file= {file_path}")
-        if file_path.suffix.lower() not in self.supported_formats:
-            raise ValueError(f"Unsupported_file_format. file= {file_path.name} supported_formats= {self.supported_formats}")
+            raise EntityNotFoundError("file not found")
+        file_type = file_path.suffix.lower()
+        if file_type not in self.supported_formats:
+            raise InvalidFileType(
+                "Invalid File type or unsupported file type", extra={"type": file_type}
+            )
 
-    async def process_document(self, user_id:str,session_id:str,file_id:str) -> List[Document]:
+    async def process_document(
+        self, user_id: str, session_id: str, file_id: str
+    ) -> List[Document]:
         """Process a document file and return list chunked LangChain Document objects.
 
         Args:
@@ -86,47 +96,39 @@ class DocumentLoader:
             >>> process_document(Path("data/sample.pdf"))
             [Document(...), Document(...)]
         """
-        file_path=get_file_path(user_id,session_id,file_id)
+        file_path = get_file_path(user_id, session_id, file_id)
         self._validate_file(file_path=file_path)
-        logger.info("file_validated. file= %s",file_path.name)
+        logger.info("file_validated. file= %s", file_path.name)
+        file_type = file_path.suffix.lower()
         try:
-            if file_path.suffix.lower() == ".pdf":
+            if file_type == ".pdf":
                 docs = await self._process_pdf(file_path)
                 return docs
 
         except RETRYABLE_PDF_EXCEPTIONS as e:
-            raise DocumentError(
-                message="document_process_after_retries_pdf_error",
-                operation="pdf_processing",
-                file_path=file_path,
-                file_type=file_path.suffix.lower(),
-                file_id=file_id,
-                user_id=user_id,
-                session_id=session_id
+            raise ProcessTimeOutError(
+                "Document process timeout after retries",
+                extra={
+                    "count": settings.MAX_PDF_PROCESS_RETRY,
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "file_id": file_id,
+                    "file_type": file_type,
+                },
             ) from e
         except PERMANENT_PDF_EXCEPTIONS as e:
-            raise DocumentError(
-                message="document_process_permanant_error",
-                operation="pdf_processing",
-                file_path=file_path,
-                file_type=file_path.suffix.lower(),
-                file_id=file_id,
-                user_id=user_id,
-                session_id=session_id
-            ) from e
-        except Exception as e:
-            raise DocumentError(
-                message="document_process_unkown_error",
-                operation="pdf_processing",
-                file_path=file_path,
-                file_type=file_path.suffix.lower(),
-                file_id=file_id,
-                user_id=user_id,
-                session_id=session_id
+            raise DocumentProcessingError(
+                "Corupted or unproccessed file data",
+                extra={
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "file_id": file_id,
+                    "file_type": file_type,
+                },
             ) from e
 
     @retry(
-        stop=stop_after_attempt(settings.MAX_PDF_PROCESS_RETRY), 
+        stop=stop_after_attempt(settings.MAX_PDF_PROCESS_RETRY),
         wait=wait_exponential(multiplier=1, min=2, max=8),  # 2s, 4s, 8s
         retry=retry_if_exception_type(RETRYABLE_PDF_EXCEPTIONS),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -139,33 +141,37 @@ class DocumentLoader:
 
         pdf_loader = PyMuPDFLoader(file_path=file_path)
         data = await pdf_loader.aload()
-        load_duration=time.perf_counter()-load_start
+        load_duration = time.perf_counter() - load_start
         if not data:
             raise ValueError(f"contains_zero_pages. file= {file_path.name}")
-        
+
         logger.info(
             "pdf_loaded file= %s pages= %s duration= %.3fs",
             file_path.name,
             len(data),
-            load_duration
+            load_duration,
         )
         splitter = get_recursive_splitter(
             chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
         )
-        chunks_start=time.perf_counter()
+        chunks_start = time.perf_counter()
         docs = splitter.split_documents(data)
-        chunks_duration=time.perf_counter()-chunks_start
+        chunks_duration = time.perf_counter() - chunks_start
         if not docs:
-            raise ValueError(
-                f"PDF loaded but produced no chunks. "
-                f"File may be empty or contain only images: {file_path.name}"
-            )
+            raise DocumentProcessingError("no data found in file")
 
-        logger.info("processed_pdf= file %s chunks= %s duration= %.3fs", file_path.name, len(docs),chunks_duration)
+        logger.info(
+            "processed_pdf= file %s chunks= %s duration= %.3fs",
+            file_path.name,
+            len(docs),
+            chunks_duration,
+        )
         return docs
+
 
 @lru_cache()
 def get_doc_loader():
     return DocumentLoader()
 
-doc_loader=get_doc_loader()
+
+doc_loader = get_doc_loader()

@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from langfuse.langchain import CallbackHandler
 from langchain_core.runnables import RunnableConfig
 from functools import lru_cache
-from app.core.exceptions import GraphError, VectorStoreError
+from app.core.exceptions import GraphError,ProcessTimeOutError
 from app.core.config import settings
 from langchain_core.messages import BaseMessage
 
@@ -72,11 +72,8 @@ class Graph:
             logger.info("graph_compiled")
             return graph
         except Exception as e:
-            raise GraphError(
-                "Unkown_excepiton or compilation fails",
-                operation="creating_and_compiling_graph",
-                step="orchestration"
-            ) from e
+            logger.error("failed to initialize the graph orchestration")
+            raise GraphError() from e
 
     async def _chat(self, state: GraphState, config: RunnableConfig):
         """Generate an LLM response using retrieved documents.
@@ -98,30 +95,8 @@ class Graph:
             config["metadata"]["user_id"],
             config["metadata"]["session_id"],
         )
-        try:
-            response = await self.llm_service.call(final_prompt)
-        except RETRYABLE_LLM_EXCEPTIONS as e:
-            error_msg = (
-                f"Failed to invoke the llm. After {settings.MAX_LLM_CALL_RETRIES} retries "
-                f"Query: '{final_prompt[:50]}...'. "
-            )
-            logger.error(error_msg)
-            raise GraphError(
-                message=error_msg,
-                operation=f"LLM_invoke",
-                step="chat",
-                user_id=user_id,
-                session_id=session_id,
-            ) from e
-        except Exception as e:
-            logger.error("unkown_error_at_chat")
-            raise GraphError(
-                message="unkown_error",
-                operation="graph_response",
-                step="chat",
-                user_id=user_id,
-                session_id=session_id,
-            ) from e
+        
+        response = await self.llm_service.call(final_prompt)
         return {"messages": [response]}
 
     async def _retriever(self, state: GraphState, config: RunnableConfig):
@@ -196,19 +171,18 @@ class Graph:
                         continue
                     yield {"type": "token", "value": token}
             logger.info("complited_graph_streaming")
-        except GraphError:
-            # Re-raise GraphError (already has context)
-            raise
-        except VectorStoreError:
-            raise
-        except Exception as e:
-            error_msg = f"Streaming failed."
-            raise GraphError(
-                message=error_msg,
-                operation=f"graph_response",
-                step="get_response_stream",
-                user_id=user_id,
-                session_id=session_id,
+        except RETRYABLE_LLM_EXCEPTIONS as e:
+            error_msg = (
+                f"Failed to invoke the llm. After {settings.MAX_LLM_CALL_RETRIES} retries "
+            )
+            extra={
+                'user_id':user_id,
+                'session_id':session_id
+            }
+            logger.error(error_msg,extra=extra)
+            raise ProcessTimeOutError(
+                "LLM service Timeout",
+                extra=extra
             ) from e
     async def get_response(self, messages: List[BaseMessage], user_id: str, session_id: str):
         """Return retrieved documents and generated response tokens.
@@ -246,19 +220,18 @@ class Graph:
                 'top_k_docs':response['retrieved_docs'],
                 'response':response['messages'][-1]
             }
-        except GraphError:
-            # Re-raise GraphError (already has context)
-            raise
-        except VectorStoreError:
-            raise
-        except Exception as e:
-            error_msg = f"Streaming failed."
-            raise GraphError(
-                message=error_msg,
-                operation=f"graph_response",
-                step="response",
-                user_id=user_id,
-                session_id=session_id,
+        except RETRYABLE_LLM_EXCEPTIONS as e:
+            error_msg = (
+                f"Failed to invoke the llm. After {settings.MAX_LLM_CALL_RETRIES} retries "
+            )
+            extra={
+                'user_id':user_id,
+                'session_id':session_id
+            }
+            logger.error(error_msg,extra=extra)
+            raise ProcessTimeOutError(
+                "LLM service Timeout",
+                extra=extra
             ) from e
 
     def _final_prompt_with_sources(

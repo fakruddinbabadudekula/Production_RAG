@@ -15,6 +15,7 @@ from openai import (
     OpenAIError,
     RateLimitError,
 )
+from app.core.exceptions import  ProcessTimeOutError
 from app.core.config import settings
 from app.core.agent.models import get_llm
 import time
@@ -56,11 +57,7 @@ class LLMService:
             )
             raise
         except (asyncio.TimeoutError, TimeoutError, APITimeoutError) as e:
-            logger.error(
-                f"LLM timed out after {settings.LLM_CALL_ASYNC_TIMEOUT}s "
-                f"— not retrying, failing fast"
-            )
-            raise
+            raise e
 
     async def call(self, final_prompt: str) -> AIMessage:
         """For now just implemented the calling llm with final prompt and return the response"""
