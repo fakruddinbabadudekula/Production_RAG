@@ -8,7 +8,6 @@ from functools import (
 
 from pathlib import Path
 
-from regex import P
 
 
 class Settings(BaseSettings):
@@ -29,14 +28,14 @@ class Settings(BaseSettings):
     APP_NAME: str = "NotebookLm"
     APP_PATH: Path = BASE_PATH / "app"
 
-    # Storage Path
-    STORAGE_PATH: Path = BASE_PATH / "storage"
+    # Data Path
+    DATA_PATH: Path = BASE_PATH / "data"
 
     # Vector
-    VECTOR_FOLDER: Path = STORAGE_PATH / "vectors"
+    VECTOR_FOLDER: Path = DATA_PATH / "vectors"
 
     # Data Path where uploaded files are stored
-    FILE_UPLOAD_PATH: Path = STORAGE_PATH / "upload_files"
+    FILE_UPLOAD_PATH: Path = DATA_PATH / "upload_files"
 
     # Embedding Model
     EMBED_MODEL: str = "gemini-embedding-001"
@@ -75,3 +74,4 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+

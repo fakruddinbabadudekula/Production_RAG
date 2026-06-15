@@ -12,12 +12,23 @@ from app.api.chat import router as chat_router
 from app.api.history import router as history_router
 from app.api.upload import router as file_upload
 from app.core.middleware import logger_middleware
+from app.core.config import settings
+def create_required_dir():
+    for path in [
+        settings.FILE_UPLOAD_PATH,
+        settings.VECTOR_FOLDER,
+    ]:
+        path.mkdir(
+            parents=True,
+            exist_ok=True
+        )
 
 
 logger=getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app):
     setup_logging()
+    create_required_dir()
     logger.info("Server Started")
     await init_db()
     logger.info("Tables are created ")

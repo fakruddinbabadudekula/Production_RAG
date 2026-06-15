@@ -1,10 +1,8 @@
-from gc import get_referents
 from typing import Optional
 import uuid
 
 from pathlib import Path
 
-from sklearn.cluster import dbscan
 
 
 from app.services.database import db_service
