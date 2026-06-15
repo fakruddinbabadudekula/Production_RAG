@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # API keys....
     OPENROUTER_BASE_URL: str
     OPENROUTER_API_KEY: str
+    GOOGLE_API_KEY:str
 
     # Model Config
     CURRENT_CHAT_MODEL: str = "openai/gpt-oss-20b:free"
@@ -38,8 +39,8 @@ class Settings(BaseSettings):
     FILE_UPLOAD_PATH: Path = STORAGE_PATH / "upload_files"
 
     # Embedding Model
-    EMBED_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
-    EMBED_MODEL_SIZE: int = 384
+    EMBED_MODEL: str = "gemini-embedding-001"
+    EMBED_MODEL_SIZE: int = 768
 
     # DataBase
     DATABASE_URL:str

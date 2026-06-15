@@ -7,8 +7,15 @@ from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_core.documents.base import Document
 import logging
 from app.core.config import settings
-from app.core.exceptions import InvalidFilePath, ProcessTimeOutError
-from langchain_huggingface import HuggingFaceEmbeddings
+from app.core.exceptions import InvalidFilePath, ProcessTimeOutError,InvalidCredentialsError
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from google.api_core.exceptions import (
+    ResourceExhausted,
+    ServiceUnavailable,
+    Unauthenticated,
+    InvalidArgument,
+    DeadlineExceeded,
+)
 from functools import lru_cache
 from tenacity import (
     retry,
@@ -21,24 +28,38 @@ from tenacity import (
 logger = logging.getLogger(__name__)
 
 RETRYABLE_VECTOR_EXCEPTIONS = (
-    ConnectionError,  # Network issues (remote embeddings)
-    TimeoutError,  # API/network timeouts
-    MemoryError,  # Temporary memory pressure
-    OSError,  # File system issues (FAISS index I/O)
-    RuntimeError,  # FAISS internal errors (sometimes transient)
+    ConnectionError,      # Network issues (remote embeddings)
+    TimeoutError,         # API/network timeouts
+    DeadlineExceeded,     # Google API call exceeded deadline
+    ResourceExhausted,    # Rate limit / quota exceeded (Google API)
+    ServiceUnavailable,   # Transient server-side error (Google API)
+    MemoryError,          # Temporary memory pressure
+    OSError,              # File system issues (FAISS index I/O)
+    RuntimeError,         # FAISS internal errors (sometimes transient)
+)
+NON_RETRYABLE_VECTOR_EXCEPTIONS=(
+    Unauthenticated,
+    InvalidArgument,
 )
 
-
 @lru_cache()
-def load_embeddings() -> HuggingFaceEmbeddings:
-    """Load and cache the HuggingFace embedding model.
-
+def load_embeddings() -> GoogleGenerativeAIEmbeddings:
+    """Load and cache the Google Generative AI embedding model.
+ 
     Returns:
-        HuggingFaceEmbeddings: Cached embedding model instance.
-        length: no of dimension are there.
+        GoogleGenerativeAIEmbeddings: Cached embedding model instance.
+        length: no of dimensions (768 for models/embedding-001).
+ 
+    Raises:
+        EnvironmentError: If GOOGLE_API_KEY is not configured.
     """
-    # here All minilm models have the 384 dimension
-    return HuggingFaceEmbeddings(model_name=settings.EMBED_MODEL)
+    if not getattr(settings, "GOOGLE_API_KEY", None) and not os.environ.get("GOOGLE_API_KEY"):
+        raise EnvironmentError("GOOGLE_API_KEY is not set in environment or settings.")
+ 
+    return GoogleGenerativeAIEmbeddings(
+        model=settings.EMBED_MODEL,
+        output_dimensionality=settings.EMBED_MODEL_SIZE,
+    )
 
 
 def get_vector_path(user_id: str, session_id: str) -> Path:
@@ -81,6 +102,10 @@ class Retriever:
                 "Retriever intialization Timeout after retries",
                 extra={"user_id": self.user_id, "session_id": self.session_id},
             ) from e
+        except NON_RETRYABLE_VECTOR_EXCEPTIONS as e:
+            raise InvalidCredentialsError(
+                "Invalid credentails from google api",
+            )
         self.retriever = self.vector_db.as_retriever(
             search_type="similarity", search_kwargs={"k": 5}
         )
@@ -174,6 +199,10 @@ class Retriever:
                     "session_id": self.session_id,
                 },
             ) from e
+        except NON_RETRYABLE_VECTOR_EXCEPTIONS as e:
+            raise InvalidCredentialsError(
+                "Invalid credentails from google api",
+            )
 
     @retry(
         stop=stop_after_attempt(3),  # Try 3 times
