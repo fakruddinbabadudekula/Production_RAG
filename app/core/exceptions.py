@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional, Any
 import uuid
-from app.schemas.enums import ErrorType
+
 
 
 class AppException(Exception):

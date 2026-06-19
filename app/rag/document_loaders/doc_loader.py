@@ -1,43 +1,13 @@
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents.base import Document
-from app.core.exceptions import (
-    EntityNotFoundError,
-    InvalidFileType,
-    ProcessTimeOutError,
-    DocumentProcessingError,
-)
 from typing import List
 from pathlib import Path
 import logging
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
-)
 import time
 from functools import lru_cache
-from app.services.upload_file import get_file_path
-
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-
-RETRYABLE_PDF_EXCEPTIONS = (
-    TimeoutError,  # Network timeout (if loading from URL)
-    ConnectionError,  # Network issues
-    MemoryError,  # Temporary memory issues
-    OSError,  # Temporary file system issues
-)
-
-# Define non-retryable errors (these are permanent failures)
-PERMANENT_PDF_EXCEPTIONS = (
-    FileNotFoundError,  # File doesn't exist - retry won't help
-    PermissionError,  # No permission - retry won't help
-    ValueError,  # Corrupt PDF - retry won't help
-)
 
 
 @lru_cache()
@@ -64,26 +34,26 @@ class DocumentLoader:
         self.supported_formats = {".pdf"}
 
     def _validate_file(self, file_path: Path):
-        """Creates new file and validates it
+        """Validates given file if exist or not and also check supported file_types
         Raise:
             - ValueError: If file type is not supported.
             - FileNotFoundError: If file is not found
         """
         if not file_path.exists():
-            raise EntityNotFoundError("file not found")
+            raise FileNotFoundError(f"file not found. path = {file_path}")
         file_type = file_path.suffix.lower()
         if file_type not in self.supported_formats:
-            raise InvalidFileType(
-                "Invalid File type or unsupported file type", extra={"type": file_type}
+            raise ValueError(
+                f"Invalid File type or unsupported file type, type = {file_type}"
             )
 
     async def process_document(
-        self, user_id: str, session_id: str, file_id: str
+        self, file_path:Path
     ) -> List[Document]:
         """Process a document file and return list chunked LangChain Document objects.
 
         Args:
-            file_path: File system path of the document to process.
+            file_path:Path = File system path of the document to process.
 
         Returns:
             List[Document]: List of chunked Document objects.
@@ -96,44 +66,13 @@ class DocumentLoader:
             >>> process_document(Path("data/sample.pdf"))
             [Document(...), Document(...)]
         """
-        file_path = get_file_path(user_id, session_id, file_id)
         self._validate_file(file_path=file_path)
         logger.info("file_validated. file= %s", file_path.name)
         file_type = file_path.suffix.lower()
-        try:
-            if file_type == ".pdf":
-                docs = await self._process_pdf(file_path)
-                return docs
+        if file_type == ".pdf":
+            docs = await self._process_pdf(file_path)
+            return docs
 
-        except RETRYABLE_PDF_EXCEPTIONS as e:
-            raise ProcessTimeOutError(
-                "Document process timeout after retries",
-                extra={
-                    "count": settings.MAX_PDF_PROCESS_RETRY,
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "file_id": file_id,
-                    "file_type": file_type,
-                },
-            ) from e
-        except PERMANENT_PDF_EXCEPTIONS as e:
-            raise DocumentProcessingError(
-                "Corupted or unproccessed file data",
-                extra={
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "file_id": file_id,
-                    "file_type": file_type,
-                },
-            ) from e
-
-    @retry(
-        stop=stop_after_attempt(settings.MAX_PDF_PROCESS_RETRY),
-        wait=wait_exponential(multiplier=1, min=2, max=8),  # 2s, 4s, 8s
-        retry=retry_if_exception_type(RETRYABLE_PDF_EXCEPTIONS),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,  # Raise the original exception after all retries fail
-    )
     async def _process_pdf(self, file_path: Path) -> List[Document]:
         """Process a PDF file and return chunked LangChain Document objects."""
         load_start = time.perf_counter()
@@ -158,7 +97,7 @@ class DocumentLoader:
         docs = splitter.split_documents(data)
         chunks_duration = time.perf_counter() - chunks_start
         if not docs:
-            raise DocumentProcessingError("no data found in file")
+            raise ValueError("no_data_found")
 
         logger.info(
             "processed_pdf= file %s chunks= %s duration= %.3fs",

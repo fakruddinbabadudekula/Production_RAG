@@ -1,20 +1,13 @@
 from typing import Optional
 import uuid
-
-from pathlib import Path
-
-
-
-from app.services.database import db_service
 from fastapi import APIRouter, Depends, Form, UploadFile, File
 from app.core.db import get_db
 from app.models.user import User
 from app.core.dependencies import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.upload_file import upload_file_service
-from app.core.agent.document_loaders.doc_loader import doc_loader
-from app.core.agent.retrievers.vector_retriever import get_retriever, get_vector_path
-from app.services.database import db_service
+from app.services.file_ingestion import file_ingestion
+from app.repositories.conversation_repository import conversation_repository
+
 
 router = APIRouter()
 
@@ -29,30 +22,12 @@ async def upload(
     # validate session id and validate file and store it and do embeddings
     user_id = current_user.user_id
     if session_id:
-        await db_service.verify_session(session_id, user_id, db)
+        await conversation_repository.verify_session(user_id, session_id, db)
 
     else:
-        session = await db_service.create_session(user_id, db)
+        session = await conversation_repository.create_session(user_id, db)
         session_id = session.session_id
 
-    file_id = upload_file_service.get_file_id()
-
-    # validate and store the file in file system=> return metadata of the file like size and type
-    upload_file_service.validate_file(file)
-    _ = await upload_file_service.store_file(
-        file, str(user_id), str(session_id), str(file_id)
-    )
-
-    # embedd the file and store it in vector store
-    docs = await doc_loader.process_document(
-        str(user_id), str(session_id), str(file_id)
-    )
-    retriever = get_retriever(str(user_id), str(session_id))
-    ids = await retriever.aadd_documents(docs)
-    # store the metadata in database
-    file_metadata = await db_service.add_file(
-        file_id, file.filename, "pdf", session_id, db
-    )
-    # return the session_id,file_metadata
+    file_metadata=await file_ingestion.ingest(file,user_id,session_id,db)
 
     return file_metadata

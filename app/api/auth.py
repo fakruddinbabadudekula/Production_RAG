@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, Response, HTTPException, status, Cookie
 from app.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.auth import LoginRequest, AccessTokenResponse
-from app.services.database import DataBaseService
 from jose import JWTError
+from app.repositories.user_repository import user_repository
 from app.core.db import get_db
-from app.utils.security import (
+from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -14,7 +14,6 @@ from app.utils.security import (
 from app.core.dependencies import get_current_user
 
 router = APIRouter()
-auth_serivices = DataBaseService()
 _DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$6j2nlBJCSCkFIMTYG4MQYg$hoq39+Hpcozusp8p1h5DtCxF1MjMiHncVfzkkekPipY"
 
 
@@ -24,7 +23,7 @@ async def login(
     response: Response,
     session: AsyncSession = Depends(get_db),
 ):
-    user = await auth_serivices.get_user(payload.email, session)
+    user = await user_repository.get_user_by_email(payload.email, session)
     if not user:
         # why dummy_hash, to take costant time to return the response if user doesn't send correct email,
         # if we return immediatly then attacker know this user doesn't in the database, not the password incorrect, user doesn't know what's incorrect like email or password you return only invalid credinals.

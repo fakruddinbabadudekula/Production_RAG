@@ -5,7 +5,7 @@ from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.db import get_db
-from app.utils.security import decode_token
+from app.core.security import decode_token
 import uuid
 security=HTTPBearer()
 

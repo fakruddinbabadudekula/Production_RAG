@@ -27,7 +27,10 @@ class FileMetadata(Base):
         SqlEnum(FileType)
     )
     name:Mapped[str]=mapped_column(
-        String(30)
+        String()
+    )
+    size:Mapped[int]=mapped_column(
+        Integer()
     )
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),
         server_default=func.now(),
