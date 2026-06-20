@@ -40,17 +40,15 @@ class DocumentLoader:
             - FileNotFoundError: If file is not found
         """
         if not file_path.exists():
-            raise FileNotFoundError(f"file not found. path = {file_path}")
+            raise FileNotFoundError(f"file_not_found. path = {file_path}")
         file_type = file_path.suffix.lower()
         if file_type not in self.supported_formats:
             raise ValueError(
-                f"Invalid File type or unsupported file type, type = {file_type}"
+                f"Invalid_File_type or unsupported_file_type, type = {file_type}"
             )
 
-    async def process_document(
-        self, file_path:Path
-    ) -> List[Document]:
-        """Process a document file and return list chunked LangChain Document objects.
+    async def process_document(self, file_path: Path) -> List[Document]:
+        """Process a document file and return list of chunked LangChain Document objects.
 
         Args:
             file_path:Path = File system path of the document to process.
@@ -67,7 +65,7 @@ class DocumentLoader:
             [Document(...), Document(...)]
         """
         self._validate_file(file_path=file_path)
-        logger.info("file_validated. file= %s", file_path.name)
+
         file_type = file_path.suffix.lower()
         if file_type == ".pdf":
             docs = await self._process_pdf(file_path)
@@ -76,8 +74,6 @@ class DocumentLoader:
     async def _process_pdf(self, file_path: Path) -> List[Document]:
         """Process a PDF file and return chunked LangChain Document objects."""
         load_start = time.perf_counter()
-        logger.info("started_pdf_process. file= %s", file_path.name)
-
         pdf_loader = PyMuPDFLoader(file_path=file_path)
         data = await pdf_loader.aload()
         load_duration = time.perf_counter() - load_start
@@ -85,25 +81,30 @@ class DocumentLoader:
             raise ValueError(f"contains_zero_pages. file= {file_path.name}")
 
         logger.info(
-            "pdf_loaded file= %s pages= %s duration= %.3fs",
-            file_path.name,
-            len(data),
-            load_duration,
+            "pdf_loaded",
+            extra={
+                "file_path": file_path.name,
+                "page": len(data),
+                "duration": load_duration,
+            },
         )
         splitter = get_recursive_splitter(
             chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap
         )
         chunks_start = time.perf_counter()
         docs = splitter.split_documents(data)
-        chunks_duration = time.perf_counter() - chunks_start
         if not docs:
             raise ValueError("no_data_found")
 
         logger.info(
-            "processed_pdf= file %s chunks= %s duration= %.3fs",
-            file_path.name,
-            len(docs),
-            chunks_duration,
+            "processed_pdf",
+            extra={
+                "chunk_size": self.chunk_size,
+                "chunk_overlap": self.chunk_overlap,
+                "file_name": file_path.name,
+                "chunks": len(docs),
+                "duration": time.perf_counter() - chunks_start,
+            },
         )
         return docs
 

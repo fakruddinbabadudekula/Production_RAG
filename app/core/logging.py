@@ -40,7 +40,7 @@ class JSONFormatter(logging.Formatter):
                 if hasattr(record, "__dict__"):
                     standard_keys = {
                         "timestamp", "level", "logger", "message",
-                        "trace_id", "user_id", "route", "file", "function",
+                        "trace_id", "route", "file", "function",
                         # internal Python logging fields to exclude
                         "name", "msg", "args", "levelname", "levelno",
                         "pathname", "filename", "module", "funcName",
@@ -52,11 +52,15 @@ class JSONFormatter(logging.Formatter):
                     #what __dict__.items() returns it gives all the keys
                     for key, val in record.__dict__.items():
                         if key not in standard_keys:
-                            log_record[key] = val
+                            if isinstance(val, float):
+                                log_record[key] = round(val, 3)
+                            else:
+                                log_record[key] = val
             #Note why we just do this log_record['extra']=record.extra
             # why not: when we pass extra internally python flattens this like record.first_key_in_extra=value.... for all values in extra fields so we don't know what extra fields are that's why we create a standard keys value list where already handled them or log inot log_record remaining all are considered as extra valeus
             
-            
+                if hasattr(record, 'duration'):
+                    log_record['duration']=round(log_record['duration'],3)
                 # Attach exception traceback if present
                 if record.exc_info:
                     log_record["exception"] = self.formatException(record.exc_info)

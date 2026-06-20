@@ -1,5 +1,5 @@
 from functools import lru_cache
-
+import time
 from fastapi import UploadFile
 from pathlib import Path
 import aiofiles
@@ -15,13 +15,15 @@ class FileRepository:
     async def save(self, file: UploadFile, file_path: Path):
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_size = 0
-        logger.info("file_writing_started")
+        start=time.perf_counter()
         async with aiofiles.open(file_path, "wb") as out_file:
 
             while chunk := await file.read(1024 * 1024):  # Read in 1 MB chunks
                 await out_file.write(chunk)
                 file_size += len(chunk)
-        logger.info(f"completed_file_writing with size of {file_size}")
+        logger.info("completed_file_writing",
+                    extra={
+                    "file_name":file.filename,"file_size":file_size,"duration":time.perf_counter()-start})
         return file_size
 
     async def delete(self, file_path: Path):

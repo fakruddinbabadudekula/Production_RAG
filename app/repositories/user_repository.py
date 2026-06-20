@@ -7,6 +7,9 @@ from app.models.user import User
 from app.repositories.transaction import transaction
 from app.schemas.auth import RegisterUser
 from app.core.security import hash_password
+from logging import getLogger
+
+logger = getLogger(__name__)
 
 
 class UserRepository:
@@ -22,7 +25,8 @@ class UserRepository:
         result = await db.execute(select(User).where(User.user_id == user_id))
         user = result.scalars().first()
         return user
-    async def create_user(self,user: RegisterUser,db:AsyncSession):
+
+    async def create_user(self, user: RegisterUser, db: AsyncSession):
         new_user = User(
             **user.model_dump(exclude={"password"}),
             hashed_password=hash_password(user.password),
@@ -30,10 +34,13 @@ class UserRepository:
         async with transaction(db):
             db.add(new_user)
         await db.refresh(new_user)
+        logger.info("created_new_user", extra={"user_id": str(new_user.user_id)})
         return new_user
-    
+
+
 @lru_cache()
 def get_respository():
     return UserRepository()
 
-user_repository=get_respository()
+
+user_repository = get_respository()

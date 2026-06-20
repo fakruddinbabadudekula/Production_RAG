@@ -21,11 +21,9 @@ class FileIngestion:
         if not file.filename:
             ValueError("FileName_not_found")
         suffix = Path(file.filename).suffix
-        if suffix == ".pdf":
-            logger.info(f"successfully_validated_file and type {suffix}")
-
-        else:
-            raise ValueError("FileNotSupported")
+        if not suffix == ".pdf":
+            logger.warning("file_not_supported file_type = %s",suffix)
+            raise ValueError("file_not_supported")
         return suffix
 
     def get_file_id(self):
@@ -43,7 +41,7 @@ class FileIngestion:
         ).resolve()
         if not file_path.is_relative_to(settings.FILE_UPLOAD_PATH):
             raise ValueError(
-                "invalid file path",
+                "invalid_file_path",
             )
         return file_path
 

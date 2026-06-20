@@ -3,6 +3,9 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.transaction import transaction
 from app.models.file import FileMetadata
+from logging import getLogger
+
+logger = getLogger(__name__)
 
 
 class FileMetadataRepository:
@@ -27,10 +30,22 @@ class FileMetadataRepository:
         )
         async with transaction(db):
             db.add(new_file_metadata)
+        await db.refresh(new_file_metadata)
+        logger.info(
+            "new_file_is_created",
+            extra={
+                "file_id": str(file_id),
+                "type": type,
+                "size": size,
+                "session_id": str(session_id),
+            },
+        )
         return new_file_metadata
+
 
 @lru_cache()
 def get_repository():
     return FileMetadataRepository()
 
-file_metadata_repository=get_repository()
+
+file_metadata_repository = get_repository()

@@ -1,27 +1,32 @@
+import time
+
 from app.rag.interface import AsyncLLMClient
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph import StateGraph, END, START
 from langchain_core.vectorstores.base import VectorStoreRetriever
 from langgraph.graph import MessagesState
 from langchain_core.runnables import RunnableConfig
-from typing import List,Dict
+from typing import List, Dict
 from langchain_core.messages import BaseMessage
 from logging import getLogger
-logger=getLogger(__name__)
+
+logger = getLogger(__name__)
+
 
 class GraphState(MessagesState):
     """
     'messages': where stored the history of messages
     'retrieved_docs': stored retrieved metadata of the messages
     """
-    retrieved_docs:List[Dict] | None
-    
-    
+
+    retrieved_docs: List[Dict] | None
+
+
 class Graph:
-    def __init__(self,llm_client:AsyncLLMClient):
-        self.llm_client=llm_client
-        self.graph=self._get_graph()
-        
+    def __init__(self, llm_client: AsyncLLMClient):
+        self.llm_client = llm_client
+        self.graph = self._get_graph()
+
     def _get_graph(self) -> CompiledStateGraph:
         """Build and compile the LangGraph workflow.
 
@@ -31,19 +36,17 @@ class Graph:
         Raises:
             GraphError: If graph compilation fails.
         """
-        try:
-            workflow = StateGraph(GraphState)
-            workflow.add_node("retriever", self._retriever)
-            workflow.add_node("chat", self._chat)
-            workflow.add_edge(START, "retriever")
-            workflow.add_edge("retriever", "chat")
-            workflow.add_edge("chat", END)
-            graph = workflow.compile()
-            logger.info("graph_compiled")
-            return graph
-        except Exception as e:
-            logger.error("failed to initialize the graph orchestration")
-            raise e
+
+        workflow = StateGraph(GraphState)
+        workflow.add_node("retriever", self._retriever)
+        workflow.add_node("chat", self._chat)
+        workflow.add_edge(START, "retriever")
+        workflow.add_edge("retriever", "chat")
+        workflow.add_edge("chat", END)
+        graph = workflow.compile()
+        logger.info("graph_compiled")
+        return graph
+
     async def _chat(self, state: GraphState, config: RunnableConfig):
         """Generate an LLM response using retrieved documents.
 
@@ -58,7 +61,6 @@ class Graph:
         final_prompt = self._final_prompt_with_sources(
             query=state["messages"][-1].content, sources_data=state["retrieved_docs"]
         )
-        
         response = await self.llm_client.call(final_prompt)
         return {"messages": [response]}
 
@@ -75,13 +77,19 @@ class Graph:
             VectorStoreError: If retrieval fails.
         """
         query = state["messages"][-1].content
-    
-        retriever:VectorStoreRetriever = config['configurable']['retriever']
+
+        retriever: VectorStoreRetriever = config["configurable"]["retriever"]
+        start_time = time.perf_counter()
         docs = await retriever.ainvoke(query)
-        logger.info("retreived_top_%s_docs",len(docs))
+        duration = time.perf_counter() - start_time
+        logger.info(
+            "retreived_relavent_docs",
+            extra={"count": len(docs), "duration": duration},
+        )
         sources_data = self._formate_docs_to_list_dict(top_k_docs=docs)
 
         return {"retrieved_docs": sources_data}
+
     def _final_prompt_with_sources(
         self, query: str, sources_data: List[Dict] | None
     ) -> str:
@@ -166,19 +174,24 @@ class Graph:
             }
             source_metadata.append(metadata)
         return source_metadata
-    async def ainvoke(self,messages:List[BaseMessage],retriever:VectorStoreRetriever):
-        if not messages or len(messages)==0:
+
+    async def ainvoke(
+        self, messages: List[BaseMessage], retriever: VectorStoreRetriever
+    ):
+        if not messages or len(messages) == 0:
             raise ValueError(f"messages_should_not_be_empty.")
-        config = {
-                "configurable":{
-                    'retriever':retriever
-                }
-            }
-        response=await self.graph.ainvoke(
-                {"messages": messages},
-                config=config,
-            )
+        config = {"configurable": {"retriever": retriever}}
+        time_taken = time.perf_counter()
+        response = await self.graph.ainvoke(
+            {"messages": messages},
+            config=config,
+        )
+        duration = time.perf_counter() - time_taken
+        logger.info(
+            "graph_completed_the_response_generation",
+            extra={"duration": duration},
+        )
         return {
-                'top_k_docs':response['retrieved_docs'],
-                'response':response['messages'][-1]
-            }
+            "top_k_docs": response["retrieved_docs"],
+            "response": response["messages"][-1],
+        }

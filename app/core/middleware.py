@@ -26,14 +26,14 @@ async def logger_middleware(request: Request, call_next) -> Response:
     try:
         response: Response = await call_next(request)
     finally:
-        duration_ms = (time.perf_counter() - start_time) * 1000
+        duration = (time.perf_counter() - start_time) 
         logger.info(
             "requst_completed",
             extra={
                 "request_id": request_id,
                 "request_route": request.url.path,
                 "method": request.method,
-                "time_taken": duration_ms,
+                "duration": duration,
             },
         )
     response.headers['X-request-id']=request_id
