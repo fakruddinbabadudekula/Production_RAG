@@ -2,7 +2,6 @@ import time
 from typing import List
 
 from langchain_core.embeddings import Embeddings
-from openai import NotFoundError
 from app.rag.vector.faiss_vector_store import faiss_store
 from app.rag.vector.vector_embedding import vector_embedding
 from functools import lru_cache
@@ -45,7 +44,7 @@ def get_vector_path(user_id: str, session_id: str) -> Path:
     """
     vector_dir_path = (settings.VECTOR_FOLDER / user_id / session_id).resolve()
     if not vector_dir_path.is_relative_to(settings.VECTOR_FOLDER):
-        raise NotFoundError(
+        raise FileNotFoundError(
             "Invalid_Vector_Path", extra={"user_id": user_id, "session_id": session_id}
         )
     return vector_dir_path
@@ -84,9 +83,13 @@ class VectorStoreServiece:
             return vector_store
 
     async def aadd_documents(self, docs) -> List[str]:
+        """wrapper around vectore_embedding.aadd_documents"""
         return await vector_embedding.aad_documents(
             self.vector_store, self.vector_dir_path, docs
         )
+    async def adelete_documents(self,doc_ids:List[str]):
+        """wrapper around vectore_embedding.adelete_documents"""
+        return await vector_embedding.adelete_documents(self.vector_store,doc_ids)
 
     def get_retriever(self):
         """later we can add serach_type and kwargs"""

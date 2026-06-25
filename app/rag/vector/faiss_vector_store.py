@@ -38,7 +38,6 @@ class FaissStore:
 
         return vector_store
 
-
 @lru_cache(maxsize=1)
 def get_module():
     return FaissStore()

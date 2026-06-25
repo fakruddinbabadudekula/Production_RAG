@@ -77,9 +77,6 @@ class DocumentLoader:
         pdf_loader = PyMuPDFLoader(file_path=file_path)
         data = await pdf_loader.aload()
         load_duration = time.perf_counter() - load_start
-        if not data:
-            raise ValueError(f"contains_zero_pages. file= {file_path.name}")
-
         logger.info(
             "pdf_loaded",
             extra={
@@ -93,9 +90,6 @@ class DocumentLoader:
         )
         chunks_start = time.perf_counter()
         docs = splitter.split_documents(data)
-        if not docs:
-            raise ValueError("no_data_found")
-
         logger.info(
             "processed_pdf",
             extra={
@@ -107,6 +101,8 @@ class DocumentLoader:
             },
         )
         return docs
+    def get_supported_docs(self):
+        return self.supported_formats
 
 
 @lru_cache()

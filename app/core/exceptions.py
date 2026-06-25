@@ -1,87 +1,81 @@
-from pathlib import Path
-from typing import Optional, Any
-import uuid
+# app/core/exceptions.py
+from enum import Enum
 
+
+class ErrorType(str, Enum):
+    NOT_FOUND = "not_found"
+    VALIDATION = "validation_error"
+    CONFLICT = "conflict"
+    UNAUTHORIZED = "unauthorized"
+    FORBIDDEN = "forbidden"
+    EXTERNAL_SERVICE = "external_service_error"
+    INTERNAL = "internal_error"
+    INVALID = "invalid_error"
 
 
 class AppException(Exception):
-    """
-    Base exception for all application-specific and operational errors.
-    """
+    error_type: ErrorType = ErrorType.INTERNAL
 
-    error_code: str = "APPLICATION_ERROR"
-    http_status: int = 500
-    detail: str = "An unexpected error occurred."
+    def __init__(self, message: str, *, details: dict | None = None):
+        self.message = message
+        self.details = details or {}
+        super().__init__(message)
+
+class LLMServieException(AppException):
+    error_type=ErrorType.EXTERNAL_SERVICE
+    def __init__(self, message:str="llm_client failed to generate response", *, details = None):
+        super().__init__(message, details=details)
+class UnSupportedResource(AppException):
+    error_type= ErrorType.VALIDATION
+
+    def __init__(self, message:str="Invalid or Unsupported Resources are provided", *, details: dict | None = None):
+        super().__init__(message, details=details)
+
+class ValidationException(AppException):
+    error_type=ErrorType.VALIDATION
+    def __init__(self, message:str="InValid values are provided", *, details = None):
+        super().__init__(message, details=details)
+
+class DuplicateResourceException(AppException):
+    error_type = ErrorType.CONFLICT
 
     def __init__(
         self,
-        detail: str | None = None,
-        *,  # why we use star here: it specifies from here you need to pass arguments as key_value pairs
-        error_code: str | None = None,
-        http_status: int | None = None,
-        extra: dict[str, Any] | None = None,
+        message: str = "resource already exist",
+        details: dict | None = None,
     ):
-        self.detail = detail or self.detail
-        self.error_code = error_code or self.error_code
-        self.http_status = http_status or self.http_status
-        self.extra = extra or {}
-
-        super().__init__(self.detail)
+        super().__init__(
+            message,
+            details=details,
+        )
 
 
-class DatabaseError(AppException):
-    error_code = "DATABASE_ERROR"
-    http_status = 500
-    detail = "Database operation failed"
+class InvalidFilePaths(AppException):
+    error_type = ErrorType.INTERNAL
+
+    def __init__(self, message, *, details: dict | None = None):
+        super().__init__(message, details=details)
 
 
-class EntityNotFoundError(AppException):
-    error_code = "ENTITY_NOT_FOUND"
-    http_status = 404
-    detail = "Resource not found"
+class ResourceNotFoundException(AppException):
+    error_type = ErrorType.NOT_FOUND
+
+    def __init__(
+        self,
+        message: str = "resource not found",
+        *,
+        details: dict | None = None,
+    ):
+        super().__init__(
+            message,
+            details=details,
+        )
 
 
-class DuplicateResourceError(DatabaseError):
-    error_code = "DUPLICATE_RESOURCE"
-    http_status = 409
-    detail = "Resource already exists"
+class InvalidCredentialsException(AppException):
+    error_type = ErrorType.UNAUTHORIZED
 
-
-class DatabaseConnectionError(DatabaseError):
-    error_code = "DATABASE_CONNECTION_ERROR"
-    http_status = 503
-    detail = "Database unavailable"
-
-
-class InvalidCredentialsError(AppException):
-    error_code = "INVALID_CREDENTIALS"
-    http_status = 401
-    detail = "Invalid credentials"
-
-
-class InvalidFilePath(AppException):
-    error_code = "INVALID_FILE_PATH"
-    http_status = 400
-    detail = "Invalid File Path"
-
-
-class InvalidFileType(AppException):
-    error_code = "INVALID_FILE_TYPE"
-    http_status = 400
-    detail = "Invalid File Type"
-
-
-class ProcessTimeOutError(AppException):
-    error_code = "ProccessTimeOutError"
-    http_status = 504
-    detail = "Proccess TimeOut after retries"
-
-
-class DocumentProcessingError(AppException):
-    error_code = ("Document_Error",)
-    http_status = 500
-    detail = "Document processing error"
-    
-class GraphError(AppException):
-    """Specific for Rag Pipeline"""
-    pass
+    def __init__(
+        self, message: str = "Invalid Credentials", *, details: dict | None = None
+    ):
+        super().__init__(message, details=details)

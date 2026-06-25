@@ -1,5 +1,6 @@
 from functools import lru_cache
 from logging import getLogger
+from app.core.exceptions import InvalidCredentialsException
 from app.models.session import Session
 from app.models.message import Message
 from sqlalchemy import select
@@ -18,9 +19,15 @@ class ConversationRepository:
 
     async def verify_session(
         self, user_id: uuid.UUID, session_id: uuid.UUID, db: AsyncSession
-    ) -> bool:
+    ) -> None:
+        """Verify session id if not raise invalidcredentialsexception"""
         session = await db.get(Session, session_id)
-        return session is not None and session.user_id == user_id
+        if session == None:
+            raise InvalidCredentialsException(
+                "Invalid Session Id",
+                details={"user_id": str(user_id), "session_id": str(session_id)},
+            )
+        return None
 
     async def create_session(
         self,
@@ -32,6 +39,7 @@ class ConversationRepository:
             title=title,
             user_id=user_id,
         )
+        # No need to do try block and doesn't need to validate user_id because that user_id comes from get_user dependecy.If any error occurs that may be due to schema level so that it catches in global exception handler.
         async with transaction(db):
             db.add(new_session)
         await db.refresh(new_session)
@@ -49,8 +57,7 @@ class ConversationRepository:
             new_messages.append(Message(**msg.model_dump()))
         async with transaction(db):
             db.add_all(new_messages)
-        # for msg in new_messages:
-        #     db.refresh(msg)
+
         return new_messages
 
     async def get_sessions(self, user_id: uuid.UUID, db: AsyncSession) -> List[Session]:

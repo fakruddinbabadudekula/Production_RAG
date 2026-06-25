@@ -1,4 +1,5 @@
 from functools import lru_cache
+from unittest import result
 from langchain_community.vectorstores import VectorStore
 from langchain_core.vectorstores.base import VectorStoreRetriever
 from langchain_core.documents.base import Document
@@ -29,6 +30,27 @@ class VectorEmbedding:
             "duration":time.perf_counter()-start}
         )
         return docs_ids
+    
+    async def adelete_documents(self,vector_store:VectorStore,doc_ids:List[str]):
+        """Async delete by vector ID or other criteria.
+
+        Args:
+            vectore_store: Vectore_store where we want to delete.
+            doc_ids: List of IDs to delete. If `None`, delete all.
+        Returns:
+            `True` if deletion is successful, `False` otherwise, `None` if not
+                implemented.
+        """
+        start=time.perf_counter()
+        result= await vector_store.adelete(doc_ids)
+        logger.info(
+            "Succesfully_deleted_docs_from_vector_store",
+            extra={
+                "count":len(doc_ids),
+                "duration":time.perf_counter()-start
+            }
+        )
+        return result
 
     async def get_retriever(
         self,

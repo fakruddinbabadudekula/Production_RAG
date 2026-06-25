@@ -1,5 +1,7 @@
 from functools import lru_cache
 
+from app.core.config import settings
+from app.core.exceptions import LLMServieException, ValidationException
 from app.rag.workflow.graph import Graph
 from langchain_core.messages import (
     HumanMessage,
@@ -14,7 +16,7 @@ from app.schemas.enums import MessageRole
 from app.services.llm_client import llm_client
 from app.services.vector_store_service import get_vector_path,get_vector_service
 from app.repositories.conversation_repository import conversation_repository
-
+from app.services.llm_client import RETRYABLE_LLM_EXCEPTIONS
 
 
 class ChatService:
@@ -43,10 +45,25 @@ class ChatService:
         messages = await conversation_repository.get_messages(session_id, db)
         langchain_msgs = self.convert_msg_to_langchain_msg(messages)
         langchain_msgs.append(HumanMessage(content=query))
-        retriever = await get_vector_service(
-            get_vector_path(str(user_id), str(session_id))
-        ).get_retriever()
-        response = await self.graph.ainvoke(langchain_msgs, retriever)
+        try:
+            retriever = await get_vector_service(
+                get_vector_path(str(user_id), str(session_id))
+            ).get_retriever()
+            response = await self.graph.ainvoke(langchain_msgs, retriever)
+        except RETRYABLE_LLM_EXCEPTIONS as e:
+            raise LLMServieException("llm_service failed to generate response after retries",details={
+                'retries_count':settings.MAX_LLM_CALL_RETRIES,
+                'user_id':str(user_id),
+                'session_id':str(session_id)
+            }) from e
+        except ValueError as e:
+            raise ValidationException(str(e),details={
+                'user_id':str(user_id),
+                'session_id':str(session_id)
+                
+            }) from e
+            
+        # For now we only store the messages which are successfull, so later we implement better solution,like adding attribute status to the message table.
         user_msg = MessageSchema(
             session_id=session_id, role="user", content=query, top_k_docs=None
         )

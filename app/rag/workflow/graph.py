@@ -1,6 +1,5 @@
 import time
-
-from app.rag.interface import AsyncLLMClient
+from ..interface import AsyncLLMClient
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph import StateGraph, END, START
 from langchain_core.vectorstores.base import VectorStoreRetriever
@@ -32,9 +31,6 @@ class Graph:
 
         Returns:
             CompiledStateGraph: Compiled graph with retriever and chat nodes.
-
-        Raises:
-            GraphError: If graph compilation fails.
         """
 
         workflow = StateGraph(GraphState)
@@ -73,8 +69,6 @@ class Graph:
         Returns:
             Dict: Updated state containing retrieved document metadata.
 
-        Raises:
-            VectorStoreError: If retrieval fails.
         """
         query = state["messages"][-1].content
 

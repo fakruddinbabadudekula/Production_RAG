@@ -28,6 +28,7 @@ class FileMetadataRepository:
             type=type,
             session_id=session_id,
         )
+        # no need to retry why session_id is comming from trusted source
         async with transaction(db):
             db.add(new_file_metadata)
         await db.refresh(new_file_metadata)

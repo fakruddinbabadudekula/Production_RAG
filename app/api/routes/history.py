@@ -2,10 +2,10 @@ import uuid
 
 from fastapi import APIRouter, Depends
 from app.models.user import User
-from app.core.dependencies import get_current_user,get_db
+from app.api.dependencies import get_current_user,get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.conversation_repository import conversation_repository
-from app.schemas.history import SessionResponse,MessageResponse
+from app.api.schemas.history import SessionResponse,MessageResponse
 from typing import List
 router=APIRouter()
 
