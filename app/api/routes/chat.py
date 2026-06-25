@@ -12,7 +12,7 @@ from app.core.exceptions import InvalidCredentialsException
 router=APIRouter()
 @router.post("/chat",response_model=ChatRespose)
 async def chat(payload:ChatRequest,db:AsyncSession=Depends(get_db),current_user:User=Depends(get_current_user)):
-    _=conversation_repository.verify_session(current_user.user_id,payload.session_id,db)
+    _=await conversation_repository.verify_session(current_user.user_id,payload.session_id,db)
     response =await chat_service.chat(current_user.user_id,payload.session_id,payload.query,db)
     return ChatRespose(
         query=payload.query,

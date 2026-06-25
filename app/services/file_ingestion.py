@@ -1,7 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
 from fastapi import UploadFile
-from regex import E
 from app.core.config import settings
 from app.core.exceptions import (
     UnSupportedResource,
@@ -105,18 +104,18 @@ class FileIngestion:
             )
         except Exception as e:
             # if any eception occurs please remove the uploaded file and vectors for now later we will analyze more effective solutions.
-            self.cleanup_after_error(file_path)
+            self.cleanup_after_error(file_path,doc_ids,vector_service)
             raise
         return file_object
 
-    async def cleanup_after_error(self,file_path:Path,doc_ids:List[str],vectore_service):
+    async def cleanup_after_error(self,file_path:Path,doc_ids:List[str],vector_service):
         # db cleanup is already rollback so we only need to cleanup:
         # if file upload,vectorstore successfully but not got error while storing then we cleanup uploaded file and vectorestore(we can also do retries for database instead of cleaning but we implement further.)
         # if file uploaded but got error in vector store then clean uploaded files only.
         # to do this a simple approach is that takes the file_path, vector ids as arguments if both values are not none then we want to cleanup both values.if only filepath then only if both are none then it indicates storing the upload file raise the error.
         file_repository.delete(file_path)
         if not doc_ids==None:
-                vectore_service.adelete_documents(doc_ids)
+                vector_service.adelete_documents(doc_ids)
             
             
             
