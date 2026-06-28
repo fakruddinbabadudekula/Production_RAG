@@ -1,3 +1,4 @@
+"""Service Module for authenticate"""
 from functools import lru_cache
 from jose import JWTError
 import uuid

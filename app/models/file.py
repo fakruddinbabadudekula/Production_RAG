@@ -1,12 +1,13 @@
-
+"""Module contain file Database Model"""
 from app.schemas.enums import FileType
 from app.core.db import Base
 from sqlalchemy.orm import Mapped,mapped_column, relationship
 from datetime import datetime, timezone
-from sqlalchemy import ForeignKey, Integer,String,DateTime,func,Text,Enum as SqlEnum
+from sqlalchemy import ForeignKey, Integer,String,DateTime,func,Enum as SqlEnum
 import uuid
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from typing import TYPE_CHECKING
+# why we type_checking here, what type_checking returns it should be false if the file runs, then when did it be true it only true when IDE's like vscode does type checking, it's similar like compilare but type checking then only true so that for type checking only the import statement is make sence and the below usecases doesn't raise an type chekcing exception. 
 if TYPE_CHECKING:
     from app.models.session import Session
     

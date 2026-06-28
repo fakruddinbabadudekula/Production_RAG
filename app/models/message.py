@@ -1,6 +1,5 @@
+"""Module for message database model"""
 from typing import List
-
-
 from app.core.db import Base
 from sqlalchemy.orm import Mapped,mapped_column, relationship
 from datetime import datetime, timezone
@@ -29,6 +28,8 @@ class Message(Base):
     role:Mapped[MessageRole]=mapped_column(
         SqlEnum(MessageRole),nullable=False
     )
+    
+    # Here we are directly storing top_k dict where it have lenght docs and metadata of them, instead of this in future we store only doc's id's and their metadata(score), if we want doc's then take that id's then serarch the vector db.
     top_k_docs:Mapped[List|None]=mapped_column(
         JSON,nullable=True
         

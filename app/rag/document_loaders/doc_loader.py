@@ -1,3 +1,5 @@
+"""Rag module for document loading and chunking the docs."""
+
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents.base import Document
@@ -10,6 +12,7 @@ from functools import lru_cache
 logger = logging.getLogger(__name__)
 
 
+# I used lru_cache everywhere i think this is not a good one, why i indicate lru_cache for now only because i can remind ok this could be a cahe function in future if we use cache stack like redis we must cache this fucntion
 @lru_cache()
 def get_recursive_splitter(
     chunk_size: int, chunk_overlap: int
@@ -31,13 +34,15 @@ class DocumentLoader:
             raise ValueError("chunk_overlap must be less than chunk_size.")
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        # for now we only focus on pdf documents.
         self.supported_formats = {".pdf"}
 
     def _validate_file(self, file_path: Path):
-        """Validates given file if exist or not and also check supported file_types
-        Raise:
-            - ValueError: If file type is not supported.
-            - FileNotFoundError: If file is not found
+        """Validates given file if exist or not and also check supported file_types.
+        
+        Raises:
+            ValueError: If file type is not supported.
+            FileNotFoundError: If file is not found.
         """
         if not file_path.exists():
             raise FileNotFoundError(f"file_not_found. path = {file_path}")
@@ -51,14 +56,15 @@ class DocumentLoader:
         """Process a document file and return list of chunked LangChain Document objects.
 
         Args:
-            file_path:Path = File system path of the document to process.
+            file_path: File system path of the document to process.
 
         Returns:
             List[Document]: List of chunked Document objects.
 
         Raises:
             FileNotFoundError: If the file does not exist at the specified path.
-            ValueError: If the file format is unsupported or processing fails.
+            ValueError: If the file format is unsupported.
+            Exception: If process is failed.
 
         Example:
             >>> process_document(Path("data/sample.pdf"))
@@ -67,6 +73,7 @@ class DocumentLoader:
         self._validate_file(file_path=file_path)
 
         file_type = file_path.suffix.lower()
+        # for now i only have pdf right so that i directly use if condition, later i will write a dict that directly map the function to it's extension type like dict[ext]= function.
         if file_type == ".pdf":
             docs = await self._process_pdf(file_path)
             return docs
@@ -101,10 +108,14 @@ class DocumentLoader:
             },
         )
         return docs
-    def get_supported_docs(self):
+
+    def get_supported_docs(self) -> set[str]:
+        """returns the supported formates like .pdf"""
+        # now it returns in a way like this .pdf, later we can return a list like PDF,TXT...
         return self.supported_formats
 
 
+# return the documentloader but now we don't focus on parameter like chunk_size we set it as default.
 @lru_cache()
 def get_doc_loader():
     return DocumentLoader()

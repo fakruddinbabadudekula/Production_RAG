@@ -1,3 +1,5 @@
+"""Schema Module for enums where it have enums class models"""
+
 from enum import Enum
 
 

@@ -1,4 +1,4 @@
-from __future__ import annotations
+"""Module for user database model"""
 from app.core.db import Base
 from sqlalchemy.orm import Mapped,mapped_column,relationship
 from datetime import datetime, timezone
@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 
 class User(Base):
+    # For now we implented basic attributes later we can add updated_at,token's usage and other fields that are usfull for personalized model response(if all thinks gone be work)
     __tablename__="users"
     user_id:Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -23,6 +24,7 @@ class User(Base):
     )
     name: Mapped[str]=mapped_column(String(40),nullable=False)
     email:Mapped[str]=mapped_column(String(40),nullable=False,unique=True)
+    # why we store hashed_password instead of storing direct password, because security risks, you are able to see the password and also if database is leaked then the attacker only see hashed password which are dumb(i think so) why because hashed passwords are not rehashed(can't convert their original form.)
     hashed_password:Mapped[str]=mapped_column(Text,nullable=False)
     created_at:Mapped[DateTime]=mapped_column(DateTime(timezone=True),
         server_default=func.now(),

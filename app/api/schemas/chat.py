@@ -1,4 +1,4 @@
-
+"""Module for schemas which are specific for chat request"""
 from typing import List,Dict
 
 from pydantic import BaseModel

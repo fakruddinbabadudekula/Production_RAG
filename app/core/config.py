@@ -1,10 +1,12 @@
+"""Centralized config file"""
+
 from pydantic_settings import (
     BaseSettings,
 )  # Automatically reads environment variables and Validates the data
-from pydantic import Field  # Add additional information like max,min,description..
+
 from functools import (
     lru_cache,
-)  # to cache the function for same parameters, loads first time then cached.
+) 
 
 from pathlib import Path
 

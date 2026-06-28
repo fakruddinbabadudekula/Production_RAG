@@ -1,4 +1,4 @@
-
+"""Schema Module where it have user related schemas"""
 from pydantic import BaseModel,field_validator,EmailStr
 class RegisterUser(BaseModel):
     name:str

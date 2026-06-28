@@ -1,3 +1,5 @@
+"""Rag module for graph which is orchestration of rag workflow."""
+
 import time
 from ..interface import AsyncLLMClient
 from langgraph.graph.state import CompiledStateGraph
@@ -13,21 +15,24 @@ logger = getLogger(__name__)
 
 
 class GraphState(MessagesState):
-    """
-    'messages': where stored the history of messages
-    'retrieved_docs': stored retrieved metadata of the messages
-    """
+    """State shared between LangGraph nodes"""
 
     retrieved_docs: List[Dict] | None
 
 
 class Graph:
     def __init__(self, llm_client: AsyncLLMClient):
+        
+        """Initialize the RAG graph.
+        Args:
+            llm_client: AsyncLLMClient Asynchronous language model client used for response generation.
+        """
         self.llm_client = llm_client
         self.graph = self._get_graph()
 
     def _get_graph(self) -> CompiledStateGraph:
-        """Build and compile the LangGraph workflow.
+        """
+        Build and compile the LangGraph workflow.
 
         Returns:
             CompiledStateGraph: Compiled graph with retriever and chat nodes.
@@ -43,7 +48,9 @@ class Graph:
         logger.info("graph_compiled")
         return graph
 
-    async def _chat(self, state: GraphState, config: RunnableConfig):
+    async def _chat(
+        self, state: GraphState, config: RunnableConfig
+    ) -> dict[str, list[dict]]:
         """Generate an LLM response using retrieved documents.
 
         Args:
@@ -60,7 +67,9 @@ class Graph:
         response = await self.llm_client.call(final_prompt)
         return {"messages": [response]}
 
-    async def _retriever(self, state: GraphState, config: RunnableConfig):
+    async def _retriever(
+        self, state: GraphState, config: RunnableConfig
+    ) -> dict[str, list[dict]]:
         """Retrieve top-k relevant documents for the query.
 
         Args:
@@ -171,7 +180,16 @@ class Graph:
 
     async def ainvoke(
         self, messages: List[BaseMessage], retriever: VectorStoreRetriever
-    ):
+    )->dict:
+        """Async function to invoke the rag graph.
+        Args:
+            messages: 
+                list of messages to pass rag graph.
+            retriever:
+                a vector_store retreiver to get top_k_docs.
+        Returns:
+            dict:
+                contains= top_k_docs and response."""
         if not messages or len(messages) == 0:
             raise ValueError(f"messages_should_not_be_empty.")
         config = {"configurable": {"retriever": retriever}}

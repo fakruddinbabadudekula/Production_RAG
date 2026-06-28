@@ -1,5 +1,5 @@
+"""Transaction manager """
 from contextlib import asynccontextmanager
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 

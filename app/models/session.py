@@ -1,8 +1,8 @@
-from __future__ import annotations
+"""Module for session  database model """
 from app.core.db import Base
 from sqlalchemy.orm import Mapped,mapped_column, relationship
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, ForeignKey, Integer,String,DateTime,func,Text
+from sqlalchemy import ForeignKey,String,DateTime,func
 import uuid
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from typing import TYPE_CHECKING,List, Optional
@@ -25,7 +25,6 @@ class Session(Base):
     )
     title: Mapped[Optional[str]]=mapped_column(String(30),nullable=True)
     user_id:Mapped[uuid.UUID]=mapped_column(ForeignKey("users.user_id"))
-    first_prompt:Mapped[bool]=mapped_column(Boolean,default=False)
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),
         server_default=func.now(),
         default= lambda :datetime.now(timezone.utc)  

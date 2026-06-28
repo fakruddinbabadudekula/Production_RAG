@@ -1,3 +1,5 @@
+"""Repository Module for file database for storing files metadata"""
+
 from functools import lru_cache
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,9 +11,6 @@ logger = getLogger(__name__)
 
 
 class FileMetadataRepository:
-    def __init__(self):
-        pass
-
     async def insert(
         self,
         file_id: uuid.UUID,
@@ -33,7 +32,7 @@ class FileMetadataRepository:
             db.add(new_file_metadata)
         await db.refresh(new_file_metadata)
         logger.info(
-            "new_file_is_created",
+            "new file is created",
             extra={
                 "file_id": str(file_id),
                 "type": type,

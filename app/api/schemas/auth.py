@@ -1,10 +1,12 @@
-from pydantic import BaseModel, ConfigDict,EmailStr,field_validator
+"""Module for schemas which are specific for auth router"""
+
+from pydantic import BaseModel, ConfigDict
 
 
 class BaseUser(BaseModel):
     email:str
     name:str
-    
+    # what model_config means, how we create the instance of this class like this right BaseUser(key_value), this allows BaseUser(dict/another_dataclass_instance)
     model_config = ConfigDict(from_attributes=True)
     
     

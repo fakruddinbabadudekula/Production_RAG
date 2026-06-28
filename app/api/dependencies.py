@@ -1,3 +1,7 @@
+"""Module for fastapi dependencies.
+contains get_current_user:which returns the current user object,
+"""
+
 from app.models.user import User
 from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials

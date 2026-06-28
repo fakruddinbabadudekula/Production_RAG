@@ -1,7 +1,11 @@
+"""Module for upload docs which process file validation,file storage,generate embeddings and store them in vector store.
+contains upload rotuer"""
+
 from typing import Optional
 import uuid
 from fastapi import APIRouter, Depends, Form, UploadFile, File
 from app.core.db import get_db
+from app.models.file import FileMetadata
 from app.models.user import User
 from app.api.dependencies import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +22,7 @@ async def upload(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # validate session id,validate file and store it and do embeddings
+    """store the uploaded file in local storage and in vector storage"""
     user_id = current_user.user_id
     if session_id:
         await conversation_repository.verify_session(user_id, session_id, db)

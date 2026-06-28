@@ -1,3 +1,5 @@
+"""Schemas Module for Message schema"""
+
 from pydantic import BaseModel
 import uuid
 from app.schemas.enums import MessageRole

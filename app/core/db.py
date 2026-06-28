@@ -1,3 +1,7 @@
+"""Module contains sqlalchemy db async connection
+contain get_db fucntion which creates a connection instance """
+
+
 from sqlalchemy.ext.asyncio import AsyncSession,create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from app.core.config import settings

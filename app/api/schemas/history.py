@@ -1,3 +1,4 @@
+"""Module for specifif for history reqeust related schmas"""
 from pydantic import BaseModel,ConfigDict
 import uuid
 from app.schemas.enums import MessageRole

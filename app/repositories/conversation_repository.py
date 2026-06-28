@@ -1,3 +1,5 @@
+"""Repository for conversation_repository"""
+
 from functools import lru_cache
 from logging import getLogger
 from app.core.exceptions import InvalidCredentialsException
@@ -14,15 +16,19 @@ logger = getLogger(__name__)
 
 
 class ConversationRepository:
-    def __init__(self):
-        pass
-
     async def verify_session(
         self, user_id: uuid.UUID, session_id: uuid.UUID, db: AsyncSession
     ) -> None:
         """Verify session id if not raise invalidcredentialsexception"""
-        session = await db.get(Session, session_id)
-        if session == None:
+        result = await db.execute(
+            select(Session).where(
+                Session.session_id == session_id,
+                Session.user_id == user_id,
+            )
+        )
+
+        session = result.scalar_one_or_none()
+        if session is None:
             raise InvalidCredentialsException(
                 "Invalid Session Id",
                 details={"user_id": str(user_id), "session_id": str(session_id)},
@@ -52,9 +58,7 @@ class ConversationRepository:
     async def add_messages(
         self, messages: List[MessageSchema], db: AsyncSession
     ) -> List[Message]:
-        new_messages = []
-        for msg in messages:
-            new_messages.append(Message(**msg.model_dump()))
+        new_messages = [Message(**msg.model_dump()) for msg in messages]
         async with transaction(db):
             db.add_all(new_messages)
 
@@ -76,7 +80,7 @@ class ConversationRepository:
         result = await db.execute(
             select(Message)
             .where(Message.session_id == session_id)
-            .order_by(Message.created_at.desc())
+            .order_by(Message.created_at.asc())
         )
 
         messages = result.scalars().all()

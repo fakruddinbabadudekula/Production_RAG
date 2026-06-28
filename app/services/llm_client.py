@@ -1,3 +1,5 @@
+"""Service module contains llm service using llm interface from rag module"""
+
 from app.rag.interface import AsyncLLMClient
 from langchain_core.messages import AIMessage
 from tenacity import (
@@ -16,21 +18,21 @@ import time
 import asyncio
 import logging
 from logging import getLogger
+from functools import lru_cache
+from langchain_openai import ChatOpenAI
 
 logger = getLogger(__name__)
 RETRYABLE_LLM_EXCEPTIONS = (
     ConnectionError,
+    asyncio.TimeoutError,
     RateLimitError,
     APIError,
 )
-# In this code we explore the different types of models and export
-from functools import lru_cache
-from langchain_openai import ChatOpenAI
-from app.core.config import settings
 
 
 @lru_cache()
 def get_llm():
+    # for now we directly return the chatopenai instance we can later add differnt llms and get according to our needs.
     """Return the chatopenai llm instance."""
     return ChatOpenAI(
         api_key=settings.OPENROUTER_API_KEY,
@@ -69,8 +71,17 @@ class LLMClient(AsyncLLMClient):
             logger.warning("llm_call_failed_retrying", extra={"error": str(e)})
             raise
 
-    async def call(self, prompt: str):
-        """For now just implemented the calling llm with final prompt and return the response"""
+    async def call(self, prompt: str) -> AIMessage:
+        """Generate a response from the language model.
+
+        Args:
+            prompt: str
+                Prompt sent to the language model.
+
+        Returns:
+            AIMessage:
+                Generated response.
+        """
         return await self._call_llm_with_retries(prompt=prompt)
 
 

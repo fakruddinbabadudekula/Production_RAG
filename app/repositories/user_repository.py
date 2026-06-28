@@ -1,3 +1,4 @@
+"""Repository Module for user details"""
 from functools import lru_cache
 import uuid
 from app.core.exceptions import DuplicateResourceException
@@ -14,47 +15,46 @@ logger = getLogger(__name__)
 
 
 class UserRepository:
-    def __init__(self):
-        pass
 
-    async def get_user_by_email(self, user_email: str, db: AsyncSession):
-        """Get the user by using user_email
-        
-        Args: 
-            user_email:str = user email to be fetched
-            db:AsyncSession = connection session
-            
+    async def get_user_by_email(self, user_email: str, db: AsyncSession)->User|None:
+        """Get the user by using user_email.
+
+        Args:
+            user_email:str = user email to be fetched.
+            db:AsyncSession = connection session.
         Returns:
-            user:User = User model instance, include all details(including hashed password)"""
+            user:User = User model instance, include all details(including hashed password)
+        """
         result = await db.execute(select(User).where(User.email == user_email))
         # why we don't raise exception here if user not found: the upper layer(bussiness layer) take the decision weather to raise or not.
         user = result.scalars().first()
         return user
 
-    async def get_user_by_id(self, user_id: uuid.UUID, db: AsyncSession):
+    async def get_user_by_id(self, user_id: uuid.UUID, db: AsyncSession)->User|None:
         """Get the user by using user_id
-        
-        Args: 
+
+        Args:
             user_id:UUID = user id to be fetched
             db:AsyncSession = connection session
-            
+
         Returns:
-            user:User = User model instance, include all details(including hashed password)"""
+            user:User = User model instance, include all details(including hashed password)
+        """
         result = await db.execute(select(User).where(User.user_id == user_id))
         # why we don't raise exception here if user not found: the upper layer(bussiness layer) take the decision weather to raise or not.
         user = result.scalars().first()
         return user
 
-    async def create_user(self, user: RegisterUser, db: AsyncSession):
+    async def create_user(self, user: RegisterUser, db: AsyncSession)->User|None:
         """Create new user in the database.
-        
-        Args: 
+
+        Args:
             user:RegisterUser = user details from name to password
             db:AsyncSession = connection session of database
-            
+
         Returns:
-            new_user:User = Return User instance with all details which are stored in database(include hashed password) 
-            
+            new_user:User = Return User instance with all details which are stored in database(include hashed password)
+
         Raises:
             DuplicateResourceException: if user already exist or Integrity Constraint error
             Excepiton: Unknown error
