@@ -28,15 +28,15 @@ async def login(
         samesite="strict",
         max_age=60 * 60 * 24 * 7,
     )
-    return AccessTokenResponse(token=access_token)
+    return AccessTokenResponse(access_token=access_token)
+
 
 # I think we need to upgrade this roter for better authentication.current_user is not used and creates new values but didn't mean that they disable to work with previous values.
 @router.post("/refresh", response_model=AccessTokenResponse)
 async def refresh(
     response: Response,
     db: AsyncSession = Depends(get_db),
-    token=Cookie(alias="refresh_token"),
-    current_user=Depends(get_current_user),
+    token=Cookie(alias="refresh_token")
 ) -> AccessTokenResponse:
     new_access_token, new_refresh_token = await auth_service.refresh(token, db)
     response.set_cookie(
