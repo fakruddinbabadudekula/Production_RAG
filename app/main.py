@@ -49,3 +49,9 @@ def hello():
     return {
         'msg':"Hello user. How are you?"
     }
+    
+@app.get("/health")
+def health():
+    return {
+        'msg':"Yah, I am fine."
+    }
