@@ -31,4 +31,5 @@ dependencies = [
     "aiofiles>=25.1.0",
     "python-multipart>=0.0.32",
     "google-api-core>=2.31.0",
+    "pytest>=9.1.1",
 ]
