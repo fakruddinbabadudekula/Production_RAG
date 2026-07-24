@@ -112,7 +112,7 @@ class Graph:
             for i, data in enumerate(sources_data):
                 content.append(f"{i+1} {data['content']}")
             context = "\n\n".join(content)
-            final_prompt = self._create_rag_prompt(history=history[:max(len(history),6)], context=context)
+            final_prompt = self._create_rag_prompt(history=history[:min(len(history),6)], context=context)
         return final_prompt
 
     @staticmethod

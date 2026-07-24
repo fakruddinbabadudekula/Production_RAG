@@ -40,7 +40,7 @@ async def get_current_user(
             raise credentials_exception
         user_id = payload.get("sub")
         if not user_id:
-            raise 
+            raise credentials_exception
     except ExpiredSignatureError as e:
         raise InvalidCredentialsException(
             "Token expired",details={"WWW-Authenticate": "Bearer"}

@@ -43,7 +43,7 @@ async def login(
         samesite="strict",
         max_age=60 * 60 * 24 * 7,
     )
-    return AccessTokenResponse(access_token=access_token)
+    return AccessTokenResponse(token=access_token)
 
 
 # I think we need to upgrade this roter for better authentication.current_user is not used and creates new values but didn't mean that they disable to work with previous values.

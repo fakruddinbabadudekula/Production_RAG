@@ -15,7 +15,7 @@ class LoginRequest(BaseModel):
     password:str
     
 class AccessTokenResponse(BaseModel):
-    access_token:str
+    token:str
     token_type:str="bearer"
         
 class DeleteUser(BaseModel):
