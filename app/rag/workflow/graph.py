@@ -62,7 +62,7 @@ class Graph:
         Raises:
         """
         final_prompt = self._final_prompt_with_sources(
-            query=state["messages"][-1].content, sources_data=state["retrieved_docs"]
+            history=state["messages"], sources_data=state["retrieved_docs"]
         )
         response = await self.llm_client.call(final_prompt)
         return {"messages": [response]}
@@ -94,33 +94,33 @@ class Graph:
         return {"retrieved_docs": sources_data}
 
     def _final_prompt_with_sources(
-        self, query: str, sources_data: List[Dict] | None
+        self, history: List[BaseMessage], sources_data: List[Dict] | None
     ) -> str:
         """Create the final prompt including retrieved source context.
 
         Args:
-            query: User query string.
+            history: History of user messages.
             sources_data: List of retrieved document metadata.
 
         Returns:
             str: Constructed RAG prompt.
         """
         if not sources_data:
-            final_prompt = f"{query} Answer only if you know with certainty, otherwise say you don't know."
+            final_prompt = f"{history[-1].content} Answer only if you know with certainty, otherwise say you don't know."
         else:
             content = []
             for i, data in enumerate(sources_data):
                 content.append(f"{i+1} {data['content']}")
             context = "\n\n".join(content)
-            final_prompt = self._create_rag_prompt(query=query, context=context)
+            final_prompt = self._create_rag_prompt(history=history[:max(len(history),6)], context=context)
         return final_prompt
 
     @staticmethod
-    def _create_rag_prompt(query: str, context: str) -> str:
+    def _create_rag_prompt(history: List[BaseMessage], context: str) -> str:
         """Construct a citation-enforced RAG prompt.
 
         Args:
-            query: User query string.
+            history: History of User messages with current query or message.
             context: Concatenated source document content.
 
         Returns:
@@ -137,8 +137,11 @@ class Graph:
 
                         CONTEXT (with citation references):
                         {context}
-
-                        QUESTION: {query}
+                        
+                        History of previous Conversation with you and also take a look on these while generating the response:
+                        {history[:-1]}
+                        
+                        Current User QUESTION: {history[-1].content}
 
                         Please provide a comprehensive answer with proper citations. Make sure every factual statement is supported by a citation reference."""
 
