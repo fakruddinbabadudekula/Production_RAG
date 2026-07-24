@@ -7,7 +7,7 @@ import json
 import sys
 
 
-# loggingFileter is a class in logging system stack contains filter method, it takes the user logging values and do something like add or delete the values and give the new values to the next layer.If true then give the value if False it doesn't pass the values to next layer. Here values means logRecord(contains all the logging values like msg....)
+# LoggingFilter is a class in Python's logging system that implements the filter() method. It receives a LogRecord, which contains all the logging information (such as the message, level, and timestamp). The filter can modify, add, or remove values from the LogRecord before passing it to the next layer. If filter() returns True, the record continues through the logging pipeline. If it returns False, the log record is dropped and is not passed to the next layer.
 class TraceIDFilter(logging.Filter):
     """
     Injects ContextVar values into every log record automatically.
@@ -15,12 +15,14 @@ class TraceIDFilter(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.request_id = request_id_ctx.get() #getting request_id which is in contextVar and set by the logger middleware
-        record.request_route = request_route_ctx.get() #getting request_route
+        record.request_id = (
+            request_id_ctx.get()
+        )  # getting request_id which is in contextVar and set by the logger middleware
+        record.request_route = request_route_ctx.get()  # getting request_route
         return True
 
 
-# same like filter it sits in the next layer to filter, takes logRecord and formate the data how should look like and sends the data to its appropriate location(file,cloud or consoles)
+# Like a filter, a Formatter sits in the next stage of the logging pipeline. It receives a LogRecord and formats it into the desired output (such as adding timestamps, log levels, or custom fields). The formatted log is then passed to the configured handler, which writes it to the appropriate destination, such as the console, a file, or a cloud logging service.
 class JSONFormatter(logging.Formatter):
     """
     Emits one JSON object per line — the standard for
@@ -33,8 +35,13 @@ class JSONFormatter(logging.Formatter):
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),  # why we use getMessage() instead of variable .message because of when we log we pass like this "no.of %s",5 where code %s replace it with 5 but when we use .message it gives as it is like "no.oc %s" and 5 goes to record.args so we use getMessage() where it performs messages+record.args and returns final value no.of 5.
-            # Injected by TraceIDFilter
+            "message": record.getMessage(),
+            # We use `getMessage()` instead of `record.message` because log messages can use placeholders.
+            # For example: `logger.info("No. of %s", 5)`.
+            # Here, the format string (`"No. of %s"`) is stored in `record.msg`, and `5` is stored in `record.args`.
+            # `record.message` is not automatically formatted.
+            # `getMessage()` combines `record.msg` and `record.args` to produce the final message: `"No. of 5"`.
+            # `trace_id` is injected into the `LogRecord` by `TraceIDFilter`.
             "request_id": getattr(record, "request_id", "-"),
             "request_route": getattr(record, "request_route", "-"),
             # Code location — invaluable for debugging
@@ -81,12 +88,12 @@ class JSONFormatter(logging.Formatter):
             for key, val in record.__dict__.items():
                 if key not in standard_keys:
                     if isinstance(val, float):
-                        # why round the float values. for example we pass the duration which is float value contains so many decimal values so that instead of round every where in log we simply do gloabllly.
+                        # # We round float values globally (e.g., `duration`) to keep logs clean and avoid rounding them in every log statement.
                         log_record[key] = round(val, 3)
                     else:
                         log_record[key] = val
         # Note why we just do this log_record['extra']=record.extra
-        # why not: when we pass extra, internally python flattens this like record.first_key_in_extra=value.... for all values in extra fields, so we don't know what extra fields are, that's why we create a standard keys value list where already handled them or log into log_record remaining all are considered as extra values.
+        # # We can't know the extra fields beforehand because Python flattens `extra` into `LogRecord` attributes (e.g., `record.key = value`), so we filter out the standard `LogRecord` attributes and treat the remaining ones as custom `extra` fields.
 
         if hasattr(record, "duration"):
             log_record["duration"] = round(log_record["duration"], 3)
@@ -103,14 +110,16 @@ def setup_logging(level: str = "INFO") -> None:
     Configures root logger so every logger in the app
     (including third-party libraries) inherits the setup.
     """
-    handler = logging.StreamHandler(sys.stdout) #streamHandler tells where should we log, here we set stdout so that in logs into console, we can pass the filepaths or any other log clouds.Returns a hanlder we can attach them formater and filters
+    handler = logging.StreamHandler(
+        sys.stdout
+    )  ## `StreamHandler` defines where logs are written. Here, we use `stdout` to log to the console, but it can also write to a file or a cloud logging service. It returns a handler that can be configured with formatters and filters.
     handler.setFormatter(JSONFormatter())
     handler.addFilter(TraceIDFilter())  # ← attaches to handler, not per-logger
 
     root_logger = logging.getLogger()  # root = parent of all loggers
     root_logger.setLevel(level)
     root_logger.handlers.clear()  # remove default handlers
-    root_logger.addHandler(handler) #attach the our new handler to the root handler
+    root_logger.addHandler(handler)  # attach the our new handler to the root handler
 
     # Silence noisy third-party loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)

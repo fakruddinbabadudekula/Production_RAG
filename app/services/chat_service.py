@@ -4,7 +4,7 @@ from functools import lru_cache
 import uuid
 
 from app.core.config import settings
-from app.core.exceptions import LLMServieException, ValidationException
+from app.core.exceptions import LLMServieException
 from app.rag.workflow.graph import Graph
 from langchain_core.messages import (
     HumanMessage,
@@ -54,7 +54,7 @@ class ChatService:
         for message in messages:
             mapper_class = role_mapper.get(message.role)
             if not mapper_class:
-                # this should be a our fault, user doesn't give the roles or pass it right, we set the different role while storing the messages or while mapping the roles.
+                # This should be our fault, not the user's. The user either didn't provide the roles or provided them correctly, but we assigned the wrong role while storing the messages or mapping the roles.
                 raise ValueError(f"Unsupported message role: {message.role}")
             langchain_msgs.append(mapper_class(content=message.content))
         return langchain_msgs
@@ -109,7 +109,7 @@ class ChatService:
                 },
             ) from e
 
-        # For now we only store the messages which are successfull, so later we implement better solution,like adding attribute status to the message table.
+        # For now, we only store successful messages. Later, we can improve this by adding a status field to the message table.
         user_msg = MessageSchema(
             session_id=session_id, role="user", content=query, top_k_docs=None
         )
@@ -118,7 +118,7 @@ class ChatService:
             session_id=session_id,
             role="assistant",
             content=response["response"].content,
-            # for now we directly store top_k_docs directly but later we can store seperatly in another table or just stor doc_ids
+            # For now, we store top_k_docs directly. Later, we can either move them to a separate table or store only the document IDs.
             top_k_docs=response["top_k_docs"],
         )
         _ = await conversation_repository.add_messages([user_msg, assistant_msg], db)

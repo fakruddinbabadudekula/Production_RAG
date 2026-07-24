@@ -29,7 +29,7 @@ class Message(Base):
         SqlEnum(MessageRole),nullable=False
     )
     
-    # Here we are directly storing top_k dict where it have lenght docs and metadata of them, instead of this in future we store only doc's id's and their metadata(score), if we want doc's then take that id's then serarch the vector db.
+    # For now, we store the full top_k_docs dictionary, which contains the documents and their metadata. Later, we can store only the document IDs and metadata (e.g., score). When the documents are needed, we can fetch them from the vector database using those IDs.
     top_k_docs:Mapped[List|None]=mapped_column(
         JSON,nullable=True
         

@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Integer,String,DateTime,func,Enum as SqlEnum
 import uuid
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from typing import TYPE_CHECKING
-# why we type_checking here, what type_checking returns it should be false if the file runs, then when did it be true it only true when IDE's like vscode does type checking, it's similar like compilare but type checking then only true so that for type checking only the import statement is make sence and the below usecases doesn't raise an type chekcing exception. 
+# # We use `TYPE_CHECKING` because it is `False` at runtime and `True` only during static type checking by tools like VS Code, Pyright, or MyPy. This lets us import modules only for type hints, avoiding runtime imports while preventing type-checking errors.
 if TYPE_CHECKING:
     from app.models.session import Session
     

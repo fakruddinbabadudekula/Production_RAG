@@ -12,8 +12,7 @@ from functools import lru_cache
 logger = logging.getLogger(__name__)
 
 
-# I used lru_cache everywhere i think this is not a good one, why i indicate lru_cache for now only because i can remind ok this could be a cahe function in future if we use cache stack like redis we must cache this fucntion
-@lru_cache()
+# I used lru_cache everywhere. I don't think it's the best approach. I added it mainly as a reminder that these functions should be cached. In the future, if we use a cache like Redis, we should cache these functions instead.
 def get_recursive_splitter(
     chunk_size: int, chunk_overlap: int
 ) -> RecursiveCharacterTextSplitter:
@@ -73,7 +72,7 @@ class DocumentLoader:
         self._validate_file(file_path=file_path)
 
         file_type = file_path.suffix.lower()
-        # for now i only have pdf right so that i directly use if condition, later i will write a dict that directly map the function to it's extension type like dict[ext]= function.
+        #For now, I only support PDFs, so I used a simple if condition. Later, I'll replace it with a dictionary that maps each file extension to its corresponding function (e.g., dict[ext] = function)
         if file_type == ".pdf":
             docs = await self._process_pdf(file_path)
             return docs
@@ -111,11 +110,11 @@ class DocumentLoader:
 
     def get_supported_docs(self) -> set[str]:
         """returns the supported formates like .pdf"""
-        # now it returns in a way like this .pdf, later we can return a list like PDF,TXT...
+        # For now, it returns only .pdf. Later, it can return a list of supported formats, such as PDF, TXT, etc.
         return self.supported_formats
 
 
-# return the documentloader but now we don't focus on parameter like chunk_size we set it as default.
+# Return the DocumentLoader. For now, we'll use the default parameters, such as chunk_size, and avoid exposing them.
 @lru_cache()
 def get_doc_loader():
     return DocumentLoader()

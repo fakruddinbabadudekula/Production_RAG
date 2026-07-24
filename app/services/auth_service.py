@@ -41,8 +41,8 @@ class AuthService:
                                     """
         user = await user_repository.get_user_by_email(payload.email, db)
         if user == None:
-            # why dummy_hash, to take costant time to return the response if user doesn't send correct email,
-            # if we return immediatly then attacker know this user doesn't in the database, not the password incorrect, user doesn't know what's incorrect like email or password you return only invalid credinals.
+            # We use a dummy_hash to keep the response time consistent, even when the email doesn't exist.
+            # If we returned immediately, an attacker could detect that the email is not in the database based on the faster response. Instead, we always return a generic "Invalid credentials" message, so users and attackers can't tell whether the email or the password is incorrect.
             verify_password(payload.password, _DUMMY_HASH)
             raise InvalidCredentialsException(
                 "Invalid credentials email or password",

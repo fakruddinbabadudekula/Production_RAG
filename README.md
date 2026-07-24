@@ -126,6 +126,11 @@ app/
     ├── document_loaders/             # PDF loading + chunking
     ├── vector/                        # FAISS store creation/load, vector store manager
     └── workflow/graph.py               # LangGraph RAG graph (retriever -> chat)
+
+tests/
+└── rag/
+    └── document_loaders/
+        └── test_doc_loader        #Testing the doc_loader rag component.   
 ```
 
 ## Getting Started
@@ -281,6 +286,30 @@ Pydantic validation errors are serialized into a `{ field, message }[]` list. An
 - Request start/completion are logged with method, route, status code, and duration.
 - Key RAG operations (retrieval, PDF processing, graph execution, LLM calls) log structured timing and counts (`duration`, `count`, `chunks`, etc.) for performance monitoring.
 - The response includes an `X-Request-Id` header, useful for correlating client-reported issues with server logs.
+
+## Testing
+
+Right now, only the document loader (`app/rag/document_loaders/doc_loader.py`) has test 
+coverage, located in `tests/rag/document_loaders/test_doc_loader.py`. 
+
+I wrote this module's tests while learning proper testing practices for async FastAPI/RAG 
+code — mocking async dependencies, patching class constructors vs instances, and choosing 
+when to use real I/O (via `tmp_path`) vs mocks.
+
+I'm currently prioritizing my time on the RAG pipeline and FastAPI architecture itself rather 
+than expanding test coverage further. The rest of the codebase — `services/`, `repositories/`, 
+`api/routes/`, and the remaining `rag/` modules — has no tests yet.
+
+**If you'd like to contribute**, writing tests for any of these untested modules would be a 
+genuinely useful and welcome contribution. A few starting points:
+- `services/chat_service.py`, `services/llm_client.py` — mocking LLM calls and orchestration logic
+- `api/routes/` — FastAPI `TestClient` + dependency overrides for auth/DB
+- `repositories/` — test database setup and transaction rollback patterns
+- `rag/vector/` — FAISS store creation/loading round-trips
+
+Feel free to follow the same pattern used in `test_doc_loader.py` (real filesystem/objects 
+where cheap, mocks only for genuinely external calls), or bring your own approach — I'm open 
+to discussion in issues/PRs either way.
 
 ## Design Notes & Known Limitations
 

@@ -56,7 +56,7 @@ class FileRepository:
             file_path: Path
                 Path of the file to delete.
         """
-        # Here we don't raise the exception if file_path is not there,becuase file_path is created in upper layer so there is trust,but it have two option weather the data is created or not, there is no issue with this os remove entire file.
+        # We don't raise an exception if file_path doesn't exist because it's created in the upper layer, so we trust it. At this point, there are only two cases: either the data exists or it doesn't. In either case, it's safe to remove the entire file
         start = time.perf_counter()
         if await aiofiles.os.path.exists(file_path):
             await aiofiles.os.remove(file_path)
