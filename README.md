@@ -41,6 +41,7 @@ Think of it as the backend for a "chat with your documents" product (NotebookLM-
 - **Structured, contextual logging** — every request gets a `request_id` (propagated via `X-Request-Id` header) threaded through all logs for that request.
 - **Async everywhere** — SQLAlchemy 2.0 async ORM + `asyncpg`, async file I/O, async vector store operations.
 - **Multi-stage Docker build** — small production image, runs as a non-root user, with a built-in healthcheck.
+- **Framework-agnostic layering** — the RAG, service, and repository layers have zero imports from `fastapi`; they only exchange plain Python objects, so the same RAG/service/repository stack can be driven by a CLI, a worker queue, or a different web framework without touching business logic. See [Layering & Independence](#layering--independence).
 
 ## Architecture
 
@@ -279,6 +280,18 @@ All domain errors extend `AppException` and carry a `message` plus optional `det
 | `InvalidFilePaths`                            | 500 Internal Server Error                         |
 
 Pydantic validation errors are serialized into a `{ field, message }[]` list. Any unhandled exception is caught by a top-level handler and returned as a generic `500` with a safe, non-leaking message (the real exception is logged with `exc_info`).
+
+## Layering & Independence
+
+Every layer only knows about the layer directly below it, and only through plain Python types — never through framework-specific objects. That means each layer can be replaced or reused on its own:
+
+- **`rag/` doesn't know FastAPI exists.** `DocumentLoader`, `VectorStoreManager`, `FaissStore`, and `Graph` take and return plain Python types (`Path`, `str`, `list[Document]`, `dict`) — no `Request`, `UploadFile`, or `Depends` anywhere in the module. Drop this package into a CLI script, a Celery worker, or a Jupyter notebook and it works exactly the same way it does behind an HTTP route.
+- **`services/` doesn't know about routes or HTTP.** Services take primitives and an `AsyncSession`, and raise `AppException` subclasses — not `HTTPException`. The mapping from exception to status code lives entirely in `api/exception_handlers.py`, so the same `AuthService`, `ChatService`, and `FileIngestion` could sit behind a gRPC endpoint or a CLI command with no changes, only a different translation layer at the edge.
+- **`repositories/` doesn't know about services.** Each repository is a thin, single-purpose wrapper around SQLAlchemy queries for one model — it has no idea what business rule triggered the call.
+- **The LLM client is swappable behind an interface.** `services/llm_client.py` implements `rag/interface.py`'s `AsyncLLMClient` ABC. `Graph` only depends on that interface, so switching from OpenRouter/`ChatOpenAI` to Anthropic, a local model, or a mocked client for tests means writing one new class — the graph, prompts, and retrieval logic don't change.
+- **The vector store is swappable the same way.** `VectorStoreServiece` wraps FAISS-specific calls behind `aadd_documents` / `adelete_documents` / `get_retriever`. Moving to Pinecone, Qdrant, or pgvector means implementing those three methods against a new backend — nothing upstream (the ingestion pipeline, the graph, the chat service) needs to know.
+
+Net effect: **FastAPI is the thinnest layer in the project.** It's a delivery mechanism for the RAG/service/repository stack, not something the stack is built around — so the core logic outlives any one choice of web framework, vector store, or LLM provider.
 
 ## Logging & Observability
 
