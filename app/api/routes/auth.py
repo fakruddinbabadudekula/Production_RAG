@@ -3,13 +3,15 @@ contains login,refresh and logout routers"""
 
 from fastapi import APIRouter, Depends, Response, status, Cookie
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.schemas.auth import LoginRequest, AccessTokenResponse
-
+from app.api.schemas.auth import AccessTokenResponse
+from app.core.config import settings
+from app.schemas.auth import LoginData
 from app.services.auth_service import auth_service
 from app.core.db import get_db
-from app.api.dependencies import get_current_user
-
+from app.api.cookie import delete_refresh_cookie,set_refresh_cookie
 router = APIRouter()
+
+
 
 
 @router.post(
@@ -21,7 +23,7 @@ router = APIRouter()
     },
 )
 async def login(
-    payload: LoginRequest,
+    payload: LoginData,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> AccessTokenResponse:
@@ -33,17 +35,11 @@ async def login(
     - Sets a **refresh token** as an `HttpOnly` cookie, scoped to
       `/api/v1/auth/refresh`, valid for 7 days.
     """
-    access_token, refresh_token = await auth_service.login(payload, db)
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        path="/api/v1/auth/refresh",
-        secure=True,
-        httponly=True,
-        samesite="strict",
-        max_age=60 * 60 * 24 * 7,
+    token_data = await auth_service.login(payload, db)
+    set_refresh_cookie(response, token_data.refresh_token)
+    return AccessTokenResponse(
+        token=token_data.access_token, expire_at=token_data.access_expire_time
     )
-    return AccessTokenResponse(token=access_token)
 
 
 # I think we need to upgrade this roter for better authentication.current_user is not used and creates new values but didn't mean that they disable to work with previous values.
@@ -60,24 +56,12 @@ async def refresh(
     db: AsyncSession = Depends(get_db),
     token=Cookie(alias="refresh_token"),
 ) -> AccessTokenResponse:
-    """
-    Reads the `refresh_token` cookie (not a request body) and issues a new
-    access + refresh token pair, rotating the cookie.
 
-    > **Note:** the previous refresh token is not yet invalidated server-side
-    > — see the "Known Limitations" section of the README.
-    """
-    new_access_token, new_refresh_token = await auth_service.refresh(token, db)
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        path="/api/v1/auth/refresh",
-        secure=True,
-        httponly=True,
-        samesite="strict",
-        max_age=60 * 60 * 24 * 7,
+    token_data = await auth_service.refresh(token, db)
+    set_refresh_cookie(response, token_data.refresh_token)
+    return AccessTokenResponse(
+        token=token_data.access_token, expire_at=token_data.access_expire_time
     )
-    return AccessTokenResponse(token=new_access_token)
 
 
 @router.post(
@@ -85,17 +69,13 @@ async def refresh(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Log out the current user",
 )
-async def logout(response: Response, current_user=Depends(get_current_user)):
-    """
-    Clears the `refresh_token` cookie. Does not currently invalidate the
-    access token already in the client's possession (it simply expires
-    naturally per `ACCESS_TOKEN_EXPIRE_MINUTES`).
-    """
-    response.delete_cookie(
-        key="refresh_token",
-        path="/api/v1/auth/refresh",
-        httponly=True,
-        secure=True,
-        samesite="strict",
-    )
-    return None
+async def logout(
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    token=Cookie(alias="refresh_token"),
+):
+    
+    await auth_service.logout(token, db)
+    delete_refresh_cookie(response)
+
+    return 

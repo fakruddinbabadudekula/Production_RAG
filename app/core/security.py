@@ -5,7 +5,7 @@ from typing import Any
 
 from jose import jwt
 from passlib.context import CryptContext
-
+import hashlib
 from app.core.config import settings
 
 pwd_context = CryptContext(
@@ -13,6 +13,8 @@ pwd_context = CryptContext(
     deprecated="auto",
 )
 
+def hash_token(raw:str)->str:
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 def hash_password(plain_password: str) -> str:
     """takes plain password and return hashed password"""
@@ -24,7 +26,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(subject: str) -> str:
+def create_access_token(subject: str) -> tuple[str,datetime]:
     """takes data/subject and create new access token"""
     now = datetime.now(timezone.utc)
     expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -34,10 +36,13 @@ def create_access_token(subject: str) -> str:
         "iat": now,
         "exp": expire,
     }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return (
+        jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM),
+        expire,
+    )
 
 
-def create_refresh_token(subject: str | Any) -> str:
+def create_refresh_token(subject: str | Any) -> tuple[str,datetime]:
     """takes data/subject and create new refresh token"""
     now = datetime.now(timezone.utc)
     expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
@@ -47,7 +52,10 @@ def create_refresh_token(subject: str | Any) -> str:
         "iat": now,
         "exp": expire,
     }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return (
+        jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM),
+        expire,
+    )
 
 
 def decode_token(token: str) -> dict:

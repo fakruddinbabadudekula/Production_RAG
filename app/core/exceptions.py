@@ -112,3 +112,11 @@ class InvalidCredentialsException(AppException):
         self, message: str = "Invalid Credentials", *, details: dict | None = None
     ):
         super().__init__(message, details=details)
+
+class RefreshTokenValidationException(InvalidCredentialsException):
+    """Base exception for refresh token validataion errors"""
+    pass
+
+class RefreshTokenReUsedDetection(RefreshTokenValidationException):
+    """Exception for refresh token reused. Revoke all the tokens"""
+    pass
