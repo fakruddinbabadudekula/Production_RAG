@@ -3,7 +3,6 @@
 from functools import lru_cache
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.repositories.transaction import transaction
 from app.models.file import FileMetadata
 from logging import getLogger
 
@@ -28,8 +27,8 @@ class FileMetadataRepository:
             session_id=session_id,
         )
         # no need to retry,why session_id is comming from trusted source
-        async with transaction(db):
-            db.add(new_file_metadata)
+        db.add(new_file_metadata)
+        await db.flush()
         await db.refresh(new_file_metadata)
         logger.info(
             "new file is created",

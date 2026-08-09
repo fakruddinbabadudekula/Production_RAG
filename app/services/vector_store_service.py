@@ -49,7 +49,8 @@ def get_vector_path(user_id: str, session_id: str) -> Path:
     vector_dir_path = (settings.VECTOR_FOLDER / user_id / session_id).resolve()
     if not vector_dir_path.is_relative_to(settings.VECTOR_FOLDER):
         raise InvalidFilePaths(
-            "Invalid Vector Path", details={"user_id": user_id, "session_id": session_id}
+            "Invalid Vector Path",
+            details={"user_id": user_id, "session_id": session_id},
         )
     return vector_dir_path
 
@@ -70,8 +71,9 @@ class VectorStoreServiece:
             logger.info(
                 "Initialized existed vectore store successfully",
                 extra={
-                "vector_dir_path":self.vector_dir_path,
-                "duration":time.perf_counter() - start,}
+                    "vector_dir_path": self.vector_dir_path,
+                    "duration": time.perf_counter() - start,
+                },
             )
             return vector_store
         else:
@@ -81,8 +83,9 @@ class VectorStoreServiece:
             logger.info(
                 "Created new vectore store",
                 extra={
-                "vector_dir_path":self.vector_dir_path,
-                "duration":time.perf_counter() - start,},
+                    "vector_dir_path": self.vector_dir_path,
+                    "duration": time.perf_counter() - start,
+                },
             )
             return vector_store
 
@@ -91,11 +94,12 @@ class VectorStoreServiece:
         return await vector_store_manager.aadd_documents(
             self.vector_store, self.vector_dir_path, docs
         )
-    async def adelete_documents(self,doc_ids:List[str]):
-        """wrapper around vectore_embedding.adelete_documents"""
-        return await vector_store_manager.adelete_documents(self.vector_store,doc_ids)
 
-    def get_retriever(self)->VectorStoreRetriever:
+    async def adelete_documents(self, doc_ids: List[str]):
+        """wrapper around vectore_embedding.adelete_documents"""
+        return await vector_store_manager.adelete_documents(self.vector_store, doc_ids)
+
+    def get_retriever(self) -> VectorStoreRetriever:
         """later we can add serach_type and kwargs"""
         return vector_store_manager.get_retriever(self.vector_store)
 

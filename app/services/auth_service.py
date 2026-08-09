@@ -2,13 +2,18 @@
 
 from functools import lru_cache
 import uuid
-from app.core.exceptions import InvalidCredentialsException, RefreshTokenReUsedDetection ,RefreshTokenValidationException
+from app.core.exceptions import (
+    InvalidCredentialsException,
+    RefreshTokenReUsedDetection,
+    RefreshTokenValidationException,
+)
 from app.models.user import User
-from app.repositories.refresh_repository import RefreshSchema, refresh_repository
+from app.repositories.transaction import transaction
+from app.repositories.refresh_repository import refresh_repository
 from app.schemas.user import RegisterUser
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.user_repository import user_repository
-from app.schemas.auth import LoginData, TokenData
+from app.schemas.auth import LoginData, TokenData, RefreshSchema
 from datetime import datetime, timezone
 from app.core.security import (
     create_access_token,
@@ -94,35 +99,39 @@ class AuthService:
 
     async def register(self, payload: RegisterUser, db: AsyncSession) -> User:
         """Procces the register new user and wrapper around the create_user repository method."""
-        new_user = await user_repository.create_user(payload, db)
+        async with transaction(db):
+            new_user = await user_repository.create_user(payload, db)
         return new_user
 
     async def login(self, payload: LoginData, db: AsyncSession) -> TokenData:
-        user_id = await self._verify_user_and_return_it(payload, db)
-        token_data = self._generate_tokens(user_id)
-        await self._persist_refresh_token(user_id, token_data, db)
+        async with transaction(db):
+            user_id = await self._verify_user_and_return_it(payload, db)
+            token_data = self._generate_tokens(user_id)
+            await self._persist_refresh_token(user_id, token_data, db)
         return token_data
 
-    async def refresh(self, token:str, db: AsyncSession) -> TokenData:
-        stored_token=await self._validate_refresh_token(token,db)
-        # we are skipping token decode here,bcz we have user_id from store_token
-        user = await user_repository.get_user_by_id(stored_token.user_id, db)
-        if not user:
-            raise RefreshTokenValidationException(
-                "Invalid credentials token",
-                details={"WWW-Authenticate": "Bearer"},
+    async def refresh(self, token: str, db: AsyncSession) -> TokenData:
+        async with transaction(db):
+            stored_token = await self._validate_refresh_token(token, db)
+            # we are skipping token decode here,bcz we have user_id from store_token
+            user = await user_repository.get_user_by_id(stored_token.user_id, db)
+            if not user:
+                raise RefreshTokenValidationException(
+                    "Invalid credentials token",
+                    details={"WWW-Authenticate": "Bearer"},
+                )
+            await refresh_repository.mark_refresh_as_used(stored_token.token_id, db)
+            tokens_data = self._generate_tokens(user.user_id)
+            await self._persist_refresh_token(
+                user.user_id, tokens_data, db, family_id=stored_token.family_id
             )
-        await refresh_repository.mark_refresh_as_used(stored_token.token_id, db)
-        tokens_data = self._generate_tokens(user.user_id)
-        await self._persist_refresh_token(
-        user.user_id, tokens_data, db, family_id=stored_token.family_id
-    )
         return tokens_data
 
-    async def logout(self,token:str,db:AsyncSession):
-        stored_token= await self._validate_refresh_token(token,db)
-        await refresh_repository.revoke_all_tokens(stored_token.family_id,db)
-        
+    async def logout(self, token: str, db: AsyncSession):
+        async with transaction(db):
+            stored_token = await self._validate_refresh_token(token, db)
+            await refresh_repository.revoke_all_tokens(stored_token.family_id, db)
+
 
 @lru_cache()
 def get_service():

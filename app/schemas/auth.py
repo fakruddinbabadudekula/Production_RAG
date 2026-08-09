@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-
+import uuid
 class TokenData(BaseModel):
     access_token:str
     refresh_token:str
@@ -11,3 +11,9 @@ class TokenData(BaseModel):
 class LoginData(BaseModel):
     email:str
     password:str
+    
+class RefreshSchema(BaseModel):
+    user_id: uuid.UUID
+    hashed_token: str
+    family_id: uuid.UUID
+    expires_at: datetime

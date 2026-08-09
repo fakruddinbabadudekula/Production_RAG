@@ -1,4 +1,5 @@
 """Repository Module for user details"""
+
 from functools import lru_cache
 import uuid
 from app.core.exceptions import DuplicateResourceException
@@ -6,7 +7,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.user import User
-from app.repositories.transaction import transaction
 from app.schemas.user import RegisterUser
 from app.core.security import hash_password
 from logging import getLogger
@@ -16,7 +16,7 @@ logger = getLogger(__name__)
 
 class UserRepository:
 
-    async def get_user_by_email(self, user_email: str, db: AsyncSession)->User|None:
+    async def get_user_by_email(self, user_email: str, db: AsyncSession) -> User | None:
         """Get the user by using user_email.
 
         Args:
@@ -30,7 +30,7 @@ class UserRepository:
         user = result.scalars().first()
         return user
 
-    async def get_user_by_id(self, user_id: uuid.UUID, db: AsyncSession)->User|None:
+    async def get_user_by_id(self, user_id: uuid.UUID, db: AsyncSession) -> User | None:
         """Get the user by using user_id
 
         Args:
@@ -45,7 +45,7 @@ class UserRepository:
         user = result.scalars().first()
         return user
 
-    async def create_user(self, user: RegisterUser, db: AsyncSession)->User|None:
+    async def create_user(self, user: RegisterUser, db: AsyncSession) -> User | None:
         """Create new user in the database.
 
         Args:
@@ -65,14 +65,13 @@ class UserRepository:
             hashed_password=hash_password(user.password),
         )
         try:
-
-            async with transaction(db):
-                db.add(new_user)
+            db.add(new_user)
+            await db.flush()  #Flush can raises errors.
         except IntegrityError as e:
             raise DuplicateResourceException(
                 "user_already_exist", details={"user_email": new_user.email}
             ) from e
-
+        
         await db.refresh(new_user)
         logger.info("created_new_user", extra={"user_id": str(new_user.user_id)})
         return new_user

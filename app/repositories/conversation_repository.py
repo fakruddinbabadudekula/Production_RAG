@@ -9,7 +9,6 @@ from sqlalchemy import select
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.message import MessageSchema
-from app.repositories.transaction import transaction
 from typing import List
 
 logger = getLogger(__name__)
@@ -46,8 +45,9 @@ class ConversationRepository:
             user_id=user_id,
         )
         # No need to do try block and doesn't need to validate user_id because that user_id comes from get_user dependecy.If any error occurs that may be due to schema level so that it catches in global exception handler.
-        async with transaction(db):
-            db.add(new_session)
+        
+        db.add(new_session)
+        await db.flush()
         await db.refresh(new_session)
         logger.info(
             "created_new_session",
@@ -59,9 +59,9 @@ class ConversationRepository:
         self, messages: List[MessageSchema], db: AsyncSession
     ) -> List[Message]:
         new_messages = [Message(**msg.model_dump()) for msg in messages]
-        async with transaction(db):
-            db.add_all(new_messages)
 
+        db.add_all(new_messages)
+        await db.flush()
         return new_messages
 
     async def get_sessions(self, user_id: uuid.UUID, db: AsyncSession) -> List[Session]:

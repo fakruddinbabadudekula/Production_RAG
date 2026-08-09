@@ -14,6 +14,7 @@ from langchain_core.messages import (
 )
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.repositories.transaction import transaction
 from app.schemas.message import MessageSchema
 from app.models.message import Message
 from app.schemas.enums import MessageRole
@@ -90,6 +91,7 @@ class ChatService:
             LLMServiceException:
                 If the language model fails after exhausting all retries.
         """
+        await conversation_repository.verify_session(user_id,session_id,db)
         messages = await conversation_repository.get_messages(session_id, db)
         
         langchain_msgs = self.convert_msg_to_langchain_msg(messages)
@@ -121,7 +123,8 @@ class ChatService:
             # For now, we store top_k_docs directly. Later, we can either move them to a separate table or store only the document IDs.
             top_k_docs=response["top_k_docs"],
         )
-        _ = await conversation_repository.add_messages([user_msg, assistant_msg], db)
+        async with transaction(db):
+            _ = await conversation_repository.add_messages([user_msg, assistant_msg], db)
         return response
 
 

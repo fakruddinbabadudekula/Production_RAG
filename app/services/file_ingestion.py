@@ -11,6 +11,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.models.file import FileMetadata
+from app.repositories.transaction import transaction
 from app.repositories.file_repository import file_repository
 from app.rag.document_loaders.doc_loader import doc_loader
 from app.services.vector_store_service import (
@@ -119,7 +120,8 @@ class FileIngestion:
             file_size = await file_repository.save(file, file_path)
             docs = await doc_loader.process_document(file_path)
             doc_ids = await vector_service.aadd_documents(docs)
-            file_metadata = await file_metadata_repository.insert(
+            async with transaction(db):  
+                file_metadata = await file_metadata_repository.insert(
                 file_id, file.filename, "PDF", file_size, session_id, db
             )
         except ValueError as e:
