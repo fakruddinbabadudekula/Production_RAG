@@ -1,9 +1,16 @@
 # Production RAG
 
-An async, production-oriented **Retrieval-Augmented Generation (RAG)** backend built with FastAPI. Users register, upload PDF documents into isolated per-session vector stores, and chat with an LLM that answers questions using retrieved, citation-tagged context from those documents.
+⚠️ Learning Project — Not Production Ready
 
-Think of it as the backend for a "chat with your documents" product (NotebookLM-style), built with clean service/repository layering, JWT auth, async Postgres, and a LangGraph-orchestrated retrieval pipeline.
+This project is built for learning purposes, not as a claim of production readiness.
 
+I'm using it to learn how backend systems are designed and how architectural decisions behave under real-world requirements such as concurrency, security, reliability, and scale.
+
+The current implementation works, but it has known limitations. I'm intentionally working through them one by one and learning the trade-offs involved in moving from a working system toward a production-level system.
+
+The goal is not to build something that looks production-ready.
+
+The goal is to understand what production-ready actually requires.
 ---
 
 ## Table of Contents
@@ -256,13 +263,13 @@ Protected routes expect `Authorization: Bearer <access_token>`. The refresh endp
 
 ## Data Model
 
-| Table            | Key columns                                                              |
-|-------------------|-----------------------------------------------------------------------------|
-| `users`             | `user_id` (UUID, PK), `name`, `email` (unique), `hashed_password`, `created_at` |
-| `sessions`           | `session_id` (UUID, PK), `user_id` (FK), `title`, `created_at`                    |
-| `messages`            | `message_id` (UUID, PK), `session_id` (FK), `role` (`system`/`user`/`assistant`), `content`, `top_k_docs` (JSON), `created_at` |
-| `files_metadata`       | `file_id` (UUID, PK), `session_id` (FK), `type`, `name`, `size`, `created_at`         |
-
+| Table            | Key columns                                                                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users`          | `user_id` (UUID, PK), `name`, `email` (unique), `hashed_password`, `created_at`                                                                          |
+| `sessions`       | `session_id` (UUID, PK), `user_id` (FK), `title`, `created_at`                                                                                           |
+| `messages`       | `message_id` (UUID, PK), `session_id` (FK), `role` (`system`/`user`/`assistant`), `content`, `top_k_docs` (JSON), `created_at`                         |
+| `files_metadata` | `file_id` (UUID, PK), `session_id` (FK), `type`, `name`, `size`, `created_at`                                                                           |
+| `refreshtoken`   | `token_id` (UUID, PK), `hashed_token`, `user_id` (FK), `family_id` (UUID), `expires_at`, `used`, `created_at`                                           |
 A user has many sessions; a session has many messages and many uploaded files (cascade delete on both).
 
 ## Error Handling
@@ -329,12 +336,17 @@ to discussion in issues/PRs either way.
 This project favors transparency over polish in a few places — worth knowing before extending it:
 
 - **PDF only for now** — `DocumentLoader` and the upload validation only support `.pdf`. Adding a new format means implementing a loader and registering its extension.
-- **FAISS on local disk** — vector stores are per-session folders on the filesystem. This is simple and fast for a single instance but doesn't horizontally scale across multiple app replicas without a shared volume or a move to a managed vector DB.
-- **Refresh token rotation** — the `/auth/refresh` endpoint issues a new access + refresh token pair but doesn't yet invalidate the old refresh token server-side.
+- **FAISS on local disk** — vector stores are per-session folders on the filesystem. This is simple and fast for a single instance but doesn't horizontally scale across multiple app replicas without shared storage or a move to a managed vector DB.
+- **Refresh token rotation** — `/auth/refresh` now rotates the refresh token and tracks token families, but concurrent refresh requests can introduce race conditions. Reuse detection also currently takes a strict approach by revoking the token family.
+- **Repository and ORM coupling** — repository methods currently return SQLAlchemy ORM objects directly. This keeps the implementation simple but creates tighter coupling between the service and persistence layers.
+- **Async workloads** — document processing and other expensive operations currently happen within the application flow. Moving these workloads to background workers would be more suitable as traffic grows.
 - **Message storage on failure** — if the LLM call fails, neither the user's message nor a failed-assistant placeholder is stored yet.
+- **Rate limiting** — authentication, upload, and LLM-related endpoints do not yet have endpoint-specific rate limiting.
+- **Test coverage** — test coverage is currently limited and needs to expand across authentication, repositories, services, RAG workflows, and concurrent operations.
+- **Horizontal scaling** — the current architecture relies on local state in places, which makes running multiple application replicas more difficult.
 - **`/api/v1/test` route** — a leftover development route (`get_user`) not intended for production use.
 
-These are called out directly in code comments throughout the project — treat them as a running list of intentional trade-offs, not bugs.
+These are called out directly in the code and project documentation — treat them as a running list of **engineering trade-offs and areas I'm learning to improve**, not simply as bugs.
 
 ## Roadmap
 
